@@ -1,0 +1,38 @@
+name: Build VozLivre APKs
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Unit tests
+        run: gradle :core:testDebugUnitTest
+      - name: Build debug APKs
+        run: gradle :app-server:assembleDebug :app-client:assembleDebug
+      - name: Upload server APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VozLivre-Servidor-debug-apk
+          path: app-server/build/outputs/apk/debug/app-server-debug.apk
+      - name: Upload client APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VozLivre-Cliente-debug-apk
+          path: app-client/build/outputs/apk/debug/app-client-debug.apk

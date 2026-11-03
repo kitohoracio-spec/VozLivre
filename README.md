@@ -1,1 +1,105 @@
+# VozLivre
 
+VozLivre — Desenvolvido por Guido Horácio
+
+Chamadas de voz entre telemóveis Android sem Internet, por Wi-Fi (router ou hotspot), Wi-Fi Direct e Bluetooth. O áudio é comprimido com G.711 e cifrado com AES-256-GCM.
+
+O projeto tem duas apps separadas, uma para o servidor e outra para os clientes, que partilham um módulo comum com a rede, o protocolo, o áudio e a cifra.
+
+## Estrutura
+
+```
+VozLivre/
+  core/         biblioteca partilhada
+  app-server/   app do Servidor  (com.vozlivre.server)
+  app-client/   app do Cliente   (com.vozlivre.client)
+  docs/         arquitetura e protocolo
+```
+
+O servidor decide quem pode ligar (bloqueios e aprovação manual). O cliente escolhe um servidor e liga-lhe. Cada app anuncia o seu papel na rede, por isso o servidor só lista clientes e o cliente só lista servidores. A explicação completa está em [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
+
+## App Servidor
+
+Barra inferior com cinco separadores.
+
+- Ligações: logótipo, cartão de sessão ativa (online e tempo) e mosaicos com clientes ligados, chamadas ativas, pedidos pendentes e tipo de rede.
+- Clientes: Ligados, Pendentes e Histórico. Em Ligados, o botão Ligar chama o cliente. Em Pendentes, Aceitar ou Recusar.
+- Chamadas: Ativas, Recentes e Registos. A chamada ativa tem silenciar, altifalante e terminar. Fora deste separador, uma barra verde leva de volta à chamada.
+- Diagnóstico: estado geral, verificações de rede, descoberta, permissões, sinalização e áudio, tabela de pares e registo com Copiar e Limpar.
+- Definições avançadas: gestão da rede (Wi-Fi, IP manual, Wi-Fi Direct com criação de grupo, Bluetooth, portas, reinício do motor), gestão de clientes (aprovação manual, bloqueios), gestão de chamadas (regras e estatísticas), áudio, segurança (nome, senha, permissões), segundo plano, registos e sobre.
+
+## App Cliente
+
+Barra inferior com quatro separadores.
+
+- Ligação: estado da ligação ao servidor, lista de servidores encontrados, ligação por IP, Wi-Fi Direct e Bluetooth (recolhidos), nome e senha.
+- Chamadas: Recentes e Favoritos, com o botão Nova chamada que liga ao servidor escolhido.
+- Áudio: volume do altifalante, ganho do microfone, saída de áudio e dados de qualidade.
+- Estado: servidor, tipo de ligação, IP local, força do sinal, tempo de ligação, permissões, segundo plano e créditos.
+
+Em chamada, o cliente vê o ecrã de chamada com temporizador, microfone, altifalante e terminar.
+
+## Quem pode ligar a quem
+
+- Cliente para servidor e servidor para cliente: a chamada toca.
+- O servidor ignora chamadas de clientes bloqueados.
+- Com a aprovação manual ligada, o servidor recusa chamadas de clientes ainda não aceites e o cliente vê a mensagem "Chamada não autorizada".
+- Cliente para cliente e servidor para servidor: o recetor ignora a chamada.
+
+## Compilar
+
+Requisitos: JDK 17 e Android SDK 35. O Gradle 8.10.2 é o que o plugin Android 8.7.3 pede.
+
+Android Studio: abre a pasta do projeto, espera pela sincronização do Gradle e escolhe a configuração `app-server` ou `app-client`.
+
+Linha de comandos, a partir da raiz:
+
+```
+gradle :core:testDebugUnitTest
+gradle :app-server:assembleDebug :app-client:assembleDebug
+```
+
+Os APK ficam em `app-server/build/outputs/apk/debug/` e `app-client/build/outputs/apk/debug/`.
+
+O repositório não inclui o Gradle Wrapper. Para criá-lo: `gradle wrapper --gradle-version 8.10.2`.
+
+GitHub Actions: o fluxo `Build VozLivre APKs` corre os testes e compila os dois APK em cada push para `main`, em pull requests e a pedido. Os ficheiros ficam nos artefactos `VozLivre-Servidor-debug-apk` e `VozLivre-Cliente-debug-apk`.
+
+## Como testar
+
+1. Instala a app Servidor num telemóvel e a app Cliente noutro.
+2. Define a mesma senha nos dois (Servidor: Definições, Segurança. Cliente: separador Ligação).
+3. Liga os dois à mesma rede, ou usa o hotspot de um deles. Com Wi-Fi Direct, no Servidor abre Gestão da rede e toca em Criar grupo. No Cliente abre Wi-Fi Direct e Bluetooth, toca em Procurar e depois em Ligar.
+4. No Cliente toca em Procurar servidores e escolhe o servidor. Depois usa Nova chamada. No Servidor, liga a um cliente no separador Clientes.
+
+As duas apps usam as mesmas portas UDP (39871 e 39872). Para testar, instala cada uma num telemóvel diferente.
+
+## Se a chamada não acontecer
+
+No Servidor abre Diagnóstico, toca em Executar diagnóstico e depois em Copiar no registo. Causas frequentes:
+
+- Router com isolamento de clientes: usa hotspot ou Wi-Fi Direct.
+- Senhas diferentes: o registo mostra "mensagem não decifrada".
+- Poupança de bateria a fechar a app: ativa Segundo plano e retira as restrições de bateria.
+- Wi-Fi Direct até ao Android 12 exige a localização ligada.
+
+## Segundo plano
+
+O botão Segundo plano mantém a app à escuta com o ecrã apagado e mostra uma notificação de chamada em ecrã inteiro quando alguém liga. No Android 14 ou superior pode ser preciso permitir notificações em ecrã inteiro nas definições do Android. Gasta mais bateria.
+
+## Segurança
+
+Os comandos de chamada e o áudio vão cifrados com AES-256-GCM, com chave derivada da senha (PBKDF2-SHA256). Com a senha padrão, qualquer VozLivre na rede consegue decifrar. O anúncio de presença (nome, id e papel) vai em claro para a descoberta funcionar. Bloquear e aprovar clientes controla quem pode ligar ao servidor, mas não substitui a senha.
+
+## Áudio
+
+PCM de 16 bits comprimido com G.711 µ-law, em frames de 20 ms. Wi-Fi a 16 kHz, Bluetooth a 8 kHz.
+
+## Limitações
+
+- Uma só chamada de cada vez. O servidor não faz ponte de áudio entre clientes.
+- Esta versão não fala com as versões 0.5 e anteriores, que eram uma única app.
+- A força do sinal só existe em ligações Wi-Fi a um router ou hotspot. Em Wi-Fi Direct e Bluetooth aparece Indisponível.
+- O histórico e as estatísticas existem só durante a sessão. Favoritos, bloqueios e aprovações ficam guardados.
+- Sem Opus, que exigiria uma biblioteca nativa.
+- Os ícones são vetoriais desenhados à mão e podem precisar de afinação.

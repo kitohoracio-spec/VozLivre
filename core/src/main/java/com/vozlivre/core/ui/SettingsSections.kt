@@ -38,7 +38,7 @@ class IdentitySection(private val k: Kit, private val engine: CallEngine, privat
 
     override fun refresh() {
         if (engine.usingDefaultPassword) {
-            info.text = "Senha padrão ativa: qualquer VozLivre na rede pode decifrar."
+            info.text = "Senha padrão ativa: qualquer Grfee na rede pode decifrar."
             info.setTextColor(Colors.AMBER)
         } else {
             info.text = "Senha personalizada definida."
@@ -108,7 +108,7 @@ class CreditsSection(private val k: Kit) : Section() {
     init {
         val version = try { k.ctx.packageManager.getPackageInfo(k.ctx.packageName, 0).versionName } catch (e: Exception) { "" }
         card.addView(k.sectionTitle(R.drawable.ic_pulse, "Sobre / Créditos"))
-        val word = k.text("VozLivre", 26f, Colors.GREEN, true)
+        val word = k.text("Grfee", 26f, Colors.GREEN, true)
         card.addView(word, k.lp(top = 12))
         card.addView(k.text(Brand.SIGNATURE, 14f, Colors.TEXT, true), k.lp(top = 4))
         card.addView(k.muted("Chamadas de voz sem Internet por Wi-Fi, Wi-Fi Direct e Bluetooth, com áudio cifrado.", 13f), k.lp(top = 8))
@@ -215,5 +215,47 @@ class AudioSettingsSection(private val k: Kit, private val engine: CallEngine, p
         if (!volSeek.isPressed) { volSeek.progress = host.getVolume(); volValue.text = "${volSeek.progress}%" }
         if (!micSeek.isPressed) { micSeek.progress = engine.micPercent; micValue.text = "${engine.micPercent}%" }
         outValue.text = if (engine.defaultSpeaker) "Altifalante do telemóvel" else "Auricular"
+    }
+}
+
+/** Segunda chamada: o utilizador decide se atende (terminando a atual) ou se a pessoa ouve "ocupado". */
+class SecondCallSection(private val k: Kit, private val engine: CallEngine) : Section() {
+    private val card = k.card()
+    private val row = k.switchRow(
+        "Perguntar-me numa segunda chamada",
+        "Se alguém ligar durante uma chamada, aparece um aviso para atender ou recusar. Desligado, a pessoa ouve ocupado.",
+        engine.askOnSecondCall
+    ) { v -> if (engine.askOnSecondCall != v) engine.setAskOnSecondCall(v) }
+    override val view: View get() = card
+
+    init {
+        card.addView(k.sectionTitle(R.drawable.ic_call, "Chamadas em simultâneo"))
+        card.addView(row, k.lp(top = 10))
+    }
+
+    override fun refresh() {
+        val sw = row.tag as Switch
+        if (sw.isChecked != engine.askOnSecondCall) sw.isChecked = engine.askOnSecondCall
+    }
+}
+
+/** Filtro da lista de dispositivos: por defeito só aparecem os que têm a app. */
+class DeviceFilterSection(private val k: Kit, private val engine: CallEngine) : Section() {
+    private val card = k.card()
+    private val row = k.switchRow(
+        "Mostrar também aparelhos sem a app",
+        "Inclui auriculares, colunas, TV e outros dispositivos Bluetooth e Wi-Fi Direct. Serve só para diagnóstico.",
+        engine.showAllDevices
+    ) { v -> if (engine.showAllDevices != v) engine.setShowAllDevices(v) }
+    override val view: View get() = card
+
+    init {
+        card.addView(k.sectionTitle(R.drawable.ic_device, "Dispositivos visíveis"))
+        card.addView(row, k.lp(top = 10))
+    }
+
+    override fun refresh() {
+        val sw = row.tag as Switch
+        if (sw.isChecked != engine.showAllDevices) sw.isChecked = engine.showAllDevices
     }
 }

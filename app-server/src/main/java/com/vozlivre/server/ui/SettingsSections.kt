@@ -9,6 +9,7 @@ import com.vozlivre.core.ui.AudioSettingsSection
 import com.vozlivre.core.ui.BackgroundSection
 import com.vozlivre.core.ui.BtSection
 import com.vozlivre.core.ui.CreditsSection
+import com.vozlivre.core.ui.DeviceFilterSection
 import com.vozlivre.core.ui.HistorySection
 import com.vozlivre.core.ui.Host
 import com.vozlivre.core.ui.IdentitySection
@@ -18,6 +19,7 @@ import com.vozlivre.core.ui.P2pSection
 import com.vozlivre.core.ui.PeersTableSection
 import com.vozlivre.core.ui.PermissionsSection
 import com.vozlivre.core.ui.Section
+import com.vozlivre.core.ui.SecondCallSection
 import com.vozlivre.core.ui.manualIpRow
 import com.vozlivre.server.ServerEngine
 
@@ -73,11 +75,11 @@ class SettingsListSection(private val k: Kit, private val engine: ServerEngine, 
     init {
         root.orientation = LinearLayout.VERTICAL
         row(R.drawable.ic_wifi, "Gestão da rede", "Wi-Fi, Wi-Fi Direct, Bluetooth e portas") {
-            listOf(NetworkSection(k, engine), P2pSection(k, engine, host, true), BtSection(k, engine, host), AdvancedSection(k, engine, host))
+            listOf(NetworkSection(k, engine), P2pSection(k, engine, host, true), BtSection(k, engine, host), DeviceFilterSection(k, engine), AdvancedSection(k, engine, host))
         }
         row(R.drawable.ic_people, "Gestão de clientes", "Autorizações, bloqueios e limites") { clientAdminPage(k, engine, host) }
         row(R.drawable.ic_call, "Gestão de chamadas", "Regras, estatísticas e eventos") {
-            listOf(CallRulesSection(k, engine), CallStatsSection(k, engine), HistorySection(k, engine, 50))
+            listOf(SecondCallSection(k, engine), CallRulesSection(k, engine), CallStatsSection(k, engine), HistorySection(k, engine, 50))
         }
         row(R.drawable.ic_speaker, "Áudio", "Volume, microfone, saída e qualidade") { listOf(AudioSettingsSection(k, engine, host)) }
         row(R.drawable.ic_shield, "Segurança", "Senha, cifra e permissões") {

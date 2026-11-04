@@ -23,13 +23,13 @@ class PairingTest {
     @Test
     fun textFromOtherQrCodesIsRejected() {
         assertNull(Pairing.decode("https://exemplo.com"))
-        assertNull(Pairing.decode("vozlivre://join?v=2&id=x"))
-        assertNull(Pairing.decode("vozlivre://join?v=1&n=SemId"))
+        assertNull(Pairing.decode("grfee://join?v=2&id=x"))
+        assertNull(Pairing.decode("grfee://join?v=1&n=SemId"))
     }
 
     @Test
     fun onlyDottedIpv4AddressesSurvive() {
-        val text = "vozlivre://join?v=1&id=x&ip=" + "192.168.1.5,exemplo.com,300x.1.1.1,10.0.0.9"
+        val text = "grfee://join?v=1&id=x&ip=" + "192.168.1.5,exemplo.com,300x.1.1.1,10.0.0.9"
         val info = Pairing.decode(text)
         assertNotNull(info)
         assertEquals(listOf("192.168.1.5", "10.0.0.9"), info!!.ips)

@@ -11,10 +11,10 @@ import com.vozlivre.core.ui.BackgroundSection
 import com.vozlivre.core.ui.BaseActivity
 import com.vozlivre.core.ui.CreditsSection
 import com.vozlivre.core.ui.IdentitySection
-import com.vozlivre.core.ui.LogoSection
 import com.vozlivre.core.ui.NavTab
 import com.vozlivre.core.ui.PermissionsSection
 import com.vozlivre.core.ui.Screen
+import com.vozlivre.core.ui.SecondCallSection
 
 /**
  * Interface simples do Cliente com quatro separadores: Ligação, Chamadas,
@@ -24,9 +24,10 @@ class ClientActivity : BaseActivity() {
 
     override val engine: ClientEngine get() = (application as ClientApp).engine
 
+    override val roleLabel: String get() = "Cliente"
+
     override fun buildTabs(): List<NavTab> = listOf(
         NavTab(R.drawable.ic_wifi, "Ligação", Screen(k, listOf(
-            LogoSection(k, "Cliente"),
             ClientConnectionSection(k, engine, this),
             ServerListSection(k, engine, this),
             OtherMethodsSection(k, engine, this),
@@ -34,7 +35,8 @@ class ClientActivity : BaseActivity() {
         ))),
         NavTab(R.drawable.ic_call, "Chamadas", Screen(k, listOf(
             header(R.drawable.ic_call, "Chamadas"),
-            ClientCallsSection(k, engine, this)
+            ClientCallsSection(k, engine, this),
+            SecondCallSection(k, engine)
         ))),
         NavTab(R.drawable.ic_speaker, "Áudio", Screen(k, listOf(
             header(R.drawable.ic_speaker, "Áudio"),

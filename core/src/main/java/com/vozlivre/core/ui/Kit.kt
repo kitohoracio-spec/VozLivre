@@ -24,7 +24,7 @@ import android.widget.TextView
 import com.vozlivre.core.R
 
 object Brand {
-    const val SIGNATURE = "VozLivre — Desenvolvido por Guido Horácio"
+    const val SIGNATURE = "Grfee — Desenvolvido por Guido Horácio"
 }
 
 object Colors {

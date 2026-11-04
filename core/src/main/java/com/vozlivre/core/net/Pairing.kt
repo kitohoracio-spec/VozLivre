@@ -7,11 +7,11 @@ import java.net.URLEncoder
 data class PairingInfo(val id: String, val name: String, val ips: List<String>, val password: String)
 
 /**
- * Formato do QR: vozlivre://join?v=1&id=..&n=..&ip=a,b&pw=..
+ * Formato do QR: grfee://join?v=1&id=..&n=..&ip=a,b&pw=..
  * Cada valor vai codificado como URL, por isso a senha pode ter qualquer carácter.
  */
 object Pairing {
-    private const val PREFIX = "vozlivre://join?"
+    private const val PREFIX = "grfee://join?"
     private val IPV4 = Regex("^\\d{1,3}(\\.\\d{1,3}){3}$")
 
     fun encode(info: PairingInfo): String {
@@ -25,7 +25,7 @@ object Pairing {
         return PREFIX + fields.joinToString("&") { (key, value) -> key + "=" + URLEncoder.encode(value, "UTF-8") }
     }
 
-    /** Devolve null se o texto não for um QR de servidor VozLivre. */
+    /** Devolve null se o texto não for um QR de servidor Grfee. */
     fun decode(text: String): PairingInfo? {
         val t = text.trim()
         if (!t.startsWith(PREFIX)) return null

@@ -38,7 +38,11 @@ class P2pSection(private val k: Kit, private val engine: CallEngine, private val
     override fun refresh() {
         status.text = engine.p2p.status
         list.removeAllViews()
-        for (d in engine.p2p.devices) {
+        // Wi-Fi Direct lista TV, impressoras e auriculares. Telemóveis têm a categoria 10.
+        val visible = engine.p2p.devices.filter {
+            engine.showAllDevices || it.primaryDeviceType.isNullOrBlank() || it.primaryDeviceType.startsWith("10-")
+        }
+        for (d in visible) {
             val r = LinearLayout(k.ctx)
             r.orientation = LinearLayout.HORIZONTAL
             r.gravity = Gravity.CENTER_VERTICAL
@@ -76,7 +80,7 @@ class BtSection(private val k: Kit, private val engine: CallEngine, private val 
         row.addView(k.button("Procurar", Kit.Style.SECONDARY, true) { host.scanBluetooth() }, k.lp(0, -2, weight = 1f))
         row.addView(k.button("Tornar visível", Kit.Style.GHOST, true) { host.makeDiscoverable() }, k.lp(0, -2, left = 8, weight = 1f))
         card.addView(row, k.lp(top = 10))
-        card.addView(k.muted("Os dois telemóveis precisam do VozLivre aberto. Áudio a 8 kHz e alcance de poucos metros.", 12f), k.lp(top = 8))
+        card.addView(k.muted("Só aparecem telemóveis com o Grfee aberto e Bluetooth ativo. Áudio a 8 kHz e alcance de poucos metros.", 12f), k.lp(top = 8))
     }
 
     override fun refresh() {
@@ -144,7 +148,7 @@ class LogSection(private val k: Kit, private val engine: CallEngine, private val
         row.orientation = LinearLayout.HORIZONTAL
         row.addView(k.button("Copiar", Kit.Style.SECONDARY, true) {
             val cm = k.ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("VozLivre", engine.logText()))
+            cm.setPrimaryClip(ClipData.newPlainText("Grfee", engine.logText()))
             host.toast("Registo copiado")
         }, k.lp(0, -2, weight = 1f))
         row.addView(k.button("Limpar", Kit.Style.GHOST, true) { engine.clearLog() }, k.lp(0, -2, left = 8, weight = 1f))

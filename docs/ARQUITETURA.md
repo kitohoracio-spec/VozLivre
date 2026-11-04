@@ -56,7 +56,7 @@ Bluetooth: um socket RFCOMM por par, com frames `[tipo:1][tamanho:2][dados]`. Ti
 
 ## Ligação por QR
 
-O servidor gera `vozlivre://join?v=1&id=..&n=..&ip=a,b&pw=..` (`Pairing`, no pacote `net`), com cada valor codificado como URL. `ServerEngine.pairingPayload()` junta o id, o nome, os IPv4 das redes ativas e a senha. O cliente lê o texto com a biblioteca zxing-android-embedded, `Pairing.decode` valida-o (versão, id e só IPv4 numéricos) e `ClientEngine.joinServer` define a senha, escolhe o servidor e sonda os IPs. A leitura corre em `PortraitCaptureActivity`, uma subclasse da captura da biblioteca que permite o retrato.
+O servidor gera `grfee://join?v=1&id=..&n=..&ip=a,b&pw=..` (`Pairing`, no pacote `net`), com cada valor codificado como URL. `ServerEngine.pairingPayload()` junta o id, o nome, os IPv4 das redes ativas e a senha. O cliente lê o texto com a biblioteca zxing-android-embedded, `Pairing.decode` valida-o (versão, id e só IPv4 numéricos) e `ClientEngine.joinServer` define a senha, escolhe o servidor e sonda os IPs. A leitura corre em `PortraitCaptureActivity`, uma subclasse da captura da biblioteca que permite o retrato.
 
 ## Protocolo de chamada
 
@@ -74,6 +74,14 @@ PING|callId        batimento de 2 em 2 s durante a chamada
 ```
 
 Tempos: 40 s sem resposta termina a chamada de quem liga. Quem recebe perde a chamada se não chegar CALL durante 6 s. Uma chamada ativa cai depois de 9 s sem áudio nem PING.
+
+## Segunda chamada
+
+Com `askOnSecondCall` ligado, um CALL de outro par durante uma chamada fica em `waiting` e o chamador recebe RINGING. `answerWaiting` termina a chamada atual e aceita a nova, `rejectWaiting` responde REJECT. Sem decisão, a espera acaba ao fim de 6 s sem novo CALL. Se a chamada atual acabar antes, `promoteWaiting` faz a segunda tocar. Com a opção desligada, o CALL recebe BUSY.
+
+## Filtro de dispositivos
+
+`BluetoothTransport` só expõe pares que anunciam o `SERVICE_UUID` (lista de UUID do Android, atualizada com `fetchUuidsWithSdp` e `ACTION_UUID`), pares que ligaram a este telemóvel e pares a que este telemóvel já se ligou. Wi-Fi Direct mostra só dispositivos da categoria 10 (telefone) ou sem categoria. `showAllDevices` desativa ambos os filtros.
 
 ## Regras por papel
 

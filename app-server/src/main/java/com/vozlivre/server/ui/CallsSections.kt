@@ -104,8 +104,7 @@ class CallRulesSection(private val k: Kit, private val engine: ServerEngine) : S
 
     init {
         card.addView(k.sectionTitle(R.drawable.ic_call, "Regras de chamada"))
-        card.addView(k.kv("Chamadas em simultâneo", "1"), k.lp(top = 10))
-        card.addView(k.kv("Tempo limite sem resposta", "40 s"), k.lp(top = 6))
+        card.addView(k.kv("Tempo limite sem resposta", "40 s"), k.lp(top = 10))
         card.addView(k.kv("Repetição do pedido de chamada", "1 s, depois 2 s"), k.lp(top = 6))
         card.addView(k.kv("Perda de ligação", "9 s sem sinal"), k.lp(top = 6))
         card.addView(k.kv("Chamada recebida sem atender", "6 s sem repetição"), k.lp(top = 6))

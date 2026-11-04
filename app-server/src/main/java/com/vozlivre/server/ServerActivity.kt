@@ -3,7 +3,6 @@ package com.vozlivre.server
 import com.vozlivre.core.R
 import com.vozlivre.core.ui.BaseActivity
 import com.vozlivre.core.ui.LogSection
-import com.vozlivre.core.ui.LogoSection
 import com.vozlivre.core.ui.NavTab
 import com.vozlivre.core.ui.PeersTableSection
 import com.vozlivre.core.ui.Screen
@@ -25,6 +24,8 @@ class ServerActivity : BaseActivity() {
 
     override val callTabIndex: Int get() = TAB_CALLS
 
+    override val roleLabel: String get() = "Servidor"
+
     private companion object {
         /** Posição do separador Chamadas na barra inferior. */
         const val TAB_CALLS = 2
@@ -32,7 +33,6 @@ class ServerActivity : BaseActivity() {
 
     override fun buildTabs(): List<NavTab> = listOf(
         NavTab(R.drawable.ic_wifi, "Ligações", Screen(k, listOf(
-            LogoSection(k, "Servidor"),
             ServerSessionSection(k, engine),
             ServerTilesSection(k, engine, this),
             PairingSection(k, engine)

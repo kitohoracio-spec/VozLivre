@@ -33,7 +33,7 @@ class CallService : Service() {
         )
         val n: Notification = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_phone_call)
-            .setContentTitle("VozLivre")
+            .setContentTitle("Grfee")
             .setContentText(intent?.getStringExtra("text") ?: "Chamada em curso")
             .setContentIntent(open)
             .setOngoing(true)

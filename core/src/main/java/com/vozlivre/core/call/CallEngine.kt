@@ -119,6 +119,19 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
     var micPercent: Int = prefs.getInt("mic_pct", 60)
         private set
 
+    /** Se alguém liga durante uma chamada: true pergunta ao utilizador, false responde "ocupado". */
+    var askOnSecondCall: Boolean = prefs.getBoolean("ask_second", true)
+        private set
+
+    /** Mostra também dispositivos Bluetooth e Wi-Fi Direct que não têm a app. */
+    var showAllDevices: Boolean = prefs.getBoolean("show_all", false)
+        private set
+
+    /** Segunda chamada à espera de resposta do utilizador. */
+    @Volatile var waiting: Peer? = null; private set
+    private var waitingId = ""
+    private var waitingSeen = 0L
+
     val usingDefaultPassword: Boolean get() = prefs.getString("pw", "").isNullOrBlank()
 
     val history: List<CallRecord> get() = historyList.toList()
@@ -126,6 +139,7 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
     init {
         lan.listener = this
         bt.listener = this
+        bt.showAll = showAllDevices
         try { Secure.setPassword(prefs.getString("pw", "") ?: "") } catch (e: Exception) { log("Chave não iniciada: ${e.message}") }
     }
 
@@ -187,6 +201,18 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
     fun setDefaultSpeaker(on: Boolean) {
         defaultSpeaker = on
         prefs.edit().putBoolean("default_speaker", on).apply()
+    }
+
+    fun setAskOnSecondCall(on: Boolean) {
+        askOnSecondCall = on
+        prefs.edit().putBoolean("ask_second", on).apply()
+    }
+
+    fun setShowAllDevices(on: Boolean) {
+        showAllDevices = on
+        prefs.edit().putBoolean("show_all", on).apply()
+        bt.showAll = on
+        notifyPeersChanged()
     }
 
     fun setMicPercent(p: Int) {
@@ -361,6 +387,11 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
                     lastCallSeen = SystemClock.elapsedRealtime()
                     if (state == State.INCOMING) send(p, "RINGING|$cid")
                     else if (state == State.ACTIVE) send(p, "ACCEPT|$cid")
+                } else if (waiting?.id == peerId && cid == waitingId) {
+                    waitingSeen = SystemClock.elapsedRealtime()
+                    send(p, "RINGING|$cid")
+                } else if (askOnSecondCall && waiting == null) {
+                    startWaiting(p, cid)
                 } else {
                     send(p, "BUSY|$cid")
                 }
@@ -374,7 +405,10 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
             "REJECT" -> if (state == State.OUTGOING && sameCall) finish("Chamada recusada", false)
             "BUSY" -> if (state == State.OUTGOING && sameCall) finish("O outro telemóvel está ocupado", false)
             "DENY" -> if (state == State.OUTGOING && sameCall) finish("Chamada não autorizada: o servidor ainda não aprovou este cliente", false)
-            "HANGUP" -> if (state != State.IDLE && sameCall) finish("A outra pessoa terminou a chamada", false)
+            "HANGUP" -> {
+                if (state != State.IDLE && sameCall) finish("A outra pessoa terminou a chamada", false)
+                else if (waiting?.id == peerId && cid == waitingId) dropWaiting("Chamada perdida")
+            }
             "PING" -> if (state == State.ACTIVE && sameCall) lastRemote = SystemClock.elapsedRealtime()
         }
     }
@@ -469,6 +503,74 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
         muted = false; speaker = false
         statusText = message
         ui?.onToast(message)
+        ui?.onStateChanged()
+        promoteWaiting()
+    }
+
+    // ---------------------------------------------------------------- segunda chamada
+
+    private fun startWaiting(p: Peer, cid: String) {
+        waiting = p; waitingId = cid; waitingSeen = SystemClock.elapsedRealtime()
+        log("Segunda chamada de ${p.name}: à espera da decisão do utilizador")
+        send(p, "RINGING|$cid")
+        try {
+            @Suppress("DEPRECATION")
+            (app.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.vibrate(VibrationEffect.createOneShot(400, VibrationEffect.DEFAULT_AMPLITUDE))
+        } catch (_: Exception) {}
+        main.removeCallbacks(waitingWatch)
+        main.postDelayed(waitingWatch, 1000)
+        ui?.onStateChanged()
+    }
+
+    private val waitingWatch = object : Runnable {
+        override fun run() {
+            if (waiting == null) return
+            if (SystemClock.elapsedRealtime() - waitingSeen > 6000) { dropWaiting("Chamada perdida"); return }
+            main.postDelayed(this, 1000)
+        }
+    }
+
+    private fun dropWaiting(result: String) {
+        val w = waiting ?: return
+        waiting = null
+        main.removeCallbacks(waitingWatch)
+        historyList.add(0, CallRecord(w.id, w.name, true, System.currentTimeMillis(), 0, result))
+        while (historyList.size > 50) historyList.removeAt(historyList.size - 1)
+        log("Segunda chamada de ${w.name}: $result")
+        ui?.onStateChanged()
+    }
+
+    /** Recusa a segunda chamada e continua na atual. */
+    fun rejectWaiting() {
+        val w = waiting ?: return
+        send(w, "REJECT|$waitingId")
+        dropWaiting("Chamada recusada")
+    }
+
+    /** Termina a chamada atual e atende a segunda. */
+    fun answerWaiting() {
+        val w = waiting ?: return
+        val cid = waitingId
+        waiting = null
+        main.removeCallbacks(waitingWatch)
+        if (state != State.IDLE) finish("Chamada terminada para atender ${w.name}", true)
+        state = State.INCOMING; peer = w; callId = cid; incomingCall = true
+        send(w, "ACCEPT|$cid")
+        becomeActive()
+    }
+
+    /** Quando a chamada atual acaba sozinha, a segunda passa a tocar normalmente. */
+    private fun promoteWaiting() {
+        val w = waiting ?: return
+        waiting = null
+        main.removeCallbacks(waitingWatch)
+        state = State.INCOMING; peer = w; callId = waitingId; incomingCall = true
+        statusText = "Chamada de ${w.name}"
+        lastCallSeen = waitingSeen
+        startRinging()
+        if (ui == null) showIncomingNotification(w)
+        main.removeCallbacks(incomingWatch)
+        main.postDelayed(incomingWatch, 1000)
         ui?.onStateChanged()
     }
 

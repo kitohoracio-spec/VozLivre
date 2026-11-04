@@ -58,6 +58,9 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
 
     protected open val callTabIndex: Int get() = -1
 
+    /** Texto pequeno ao lado do nome na barra superior ("Servidor" ou "Cliente"). */
+    protected open val roleLabel: String get() = ""
+
     protected lateinit var k: Kit
 
     private val handler = Handler(Looper.getMainLooper())
@@ -67,6 +70,8 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
     private var screens: List<Screen> = emptyList()
     private val navItems = ArrayList<NavItem>()
     private var body: FrameLayout? = null
+    private var nav: View? = null
+    private var navShown = true
     private var current = 0
     private var subScreen: Screen? = null
     private val mainLogs = ArrayList<LogSection>()
@@ -94,6 +99,10 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
     private lateinit var speakerBtn: FrameLayout
     private var pulse: ObjectAnimator? = null
 
+    // aviso de segunda chamada
+    private lateinit var waitingBar: LinearLayout
+    private lateinit var waitingText: TextView
+
     // ---------------------------------------------------------------- ciclo de vida
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,6 +112,7 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         root = FrameLayout(this)
         root.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xFF04160D.toInt(), Colors.BG))
         buildOverlay()
+        buildWaitingBar()
         setContentView(root)
         engine.start()
         val base = ArrayList<String>(micPerms())
@@ -241,7 +251,9 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         val b = body ?: return
         val header = StaticSection(k.titleHeader(icon, title) { closeSub() })
         val sc = Screen(k, listOf<Section>(header) + sections)
+        attachScroll(sc)
         subScreen = sc
+        setNavVisible(true)
         b.removeAllViews()
         b.addView(sc.view, FrameLayout.LayoutParams(-1, -1))
         sc.refresh()
@@ -250,6 +262,7 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
     private fun closeSub() {
         subScreen = null
         subLogs.clear()
+        setNavVisible(true)
         val b = body ?: return
         b.removeAllViews()
         screens.getOrNull(current)?.let {
@@ -300,9 +313,7 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
     private fun buildShell(): View {
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
-        val b = FrameLayout(this)
-        body = b
-        col.addView(b, LinearLayout.LayoutParams(-1, 0, 1f))
+        col.addView(buildTopBar())
         if (callTabIndex >= 0) {
             val bar = k.text("", 13f, Color.BLACK, true)
             bar.gravity = Gravity.CENTER
@@ -313,22 +324,60 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
             callBar = bar
             col.addView(bar)
         }
+        // O conteúdo ocupa tudo e a barra inferior flutua por cima, no fundo.
+        val holder = FrameLayout(this)
+        val b = FrameLayout(this)
+        body = b
+        holder.addView(b, FrameLayout.LayoutParams(-1, -1))
+        col.addView(holder, LinearLayout.LayoutParams(-1, 0, 1f))
         val tabs = buildTabs()
         screens = tabs.map { it.screen }
-        col.addView(buildNav(tabs))
+        for (s in screens) attachScroll(s)
+        val navCard = buildNav(tabs)
+        nav = navCard
+        navShown = true
+        val lp = FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM)
+        lp.setMargins(k.dp(16), 0, k.dp(16), k.dp(12))
+        holder.addView(navCard, lp)
         current = 0
         select(0)
         return col
     }
 
-    private fun buildNav(tabs: List<NavTab>): View {
-        val wrap = LinearLayout(this)
-        wrap.orientation = LinearLayout.VERTICAL
-        wrap.setBackgroundColor(Colors.SURFACE)
-        wrap.addView(k.divider())
+    /** Barra superior fixa: ícone e nome da app à esquerda, papel à direita. */
+    private fun buildTopBar(): View {
         val bar = LinearLayout(this)
         bar.orientation = LinearLayout.HORIZONTAL
-        bar.setPadding(k.dp(6), k.dp(6), k.dp(6), k.dp(6))
+        bar.gravity = Gravity.CENTER_VERTICAL
+        bar.setPadding(k.dp(16), k.dp(10), k.dp(16), k.dp(6))
+        bar.addView(k.icon(R.drawable.ic_logo, Colors.GREEN, 28))
+        bar.addView(k.text("Grfee", 22f, Colors.TEXT, true), k.lp(0, -2, left = 8, weight = 1f))
+        if (roleLabel.isNotEmpty()) bar.addView(k.pill(roleLabel))
+        return bar
+    }
+
+    private fun attachScroll(s: Screen) {
+        s.onScroll = { dy, y ->
+            if (y <= k.dp(4) || dy < -k.dp(2)) setNavVisible(true)
+            else if (dy > k.dp(2)) setNavVisible(false)
+        }
+    }
+
+    /** Mostra a barra inferior ou desliza-a para fora do ecrã. */
+    private fun setNavVisible(show: Boolean) {
+        val n = nav ?: return
+        if (navShown == show) return
+        navShown = show
+        val away = (n.height + k.dp(24)).toFloat()
+        n.animate().translationY(if (show) 0f else away).setDuration(200).start()
+    }
+
+    private fun buildNav(tabs: List<NavTab>): View {
+        val bar = LinearLayout(this)
+        bar.orientation = LinearLayout.HORIZONTAL
+        bar.setPadding(k.dp(8), k.dp(8), k.dp(8), k.dp(8))
+        bar.background = k.shape(Colors.CARD, 28, Colors.alpha(Colors.GREEN, 0x33), 1)
+        k.glow(bar, Colors.GREEN, 8)
         for ((i, t) in tabs.withIndex()) {
             val item = LinearLayout(this)
             item.orientation = LinearLayout.VERTICAL
@@ -344,8 +393,7 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
             navItems.add(NavItem(item, holder, ic, tx))
             bar.addView(item, k.lp(0, -2, left = if (i > 0) 4 else 0, weight = 1f))
         }
-        wrap.addView(bar)
-        return wrap
+        return bar
     }
 
     private fun select(i: Int) {
@@ -354,6 +402,7 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         current = i
         subScreen = null
         subLogs.clear()
+        setNavVisible(true)
         b.removeAllViews()
         b.addView(screens[i].view, FrameLayout.LayoutParams(-1, -1))
         for ((j, n) in navItems.withIndex()) {
@@ -361,7 +410,7 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
             n.icon.setColorFilter(if (sel) Color.BLACK else Colors.MUTED)
             n.holder.background = if (sel) circle(Colors.GREEN) else null
             n.label.setTextColor(if (sel) Colors.GREEN else Colors.MUTED)
-            n.item.background = if (sel) k.shape(Colors.alpha(Colors.GREEN, 0x12), 14, Colors.alpha(Colors.GREEN, 0x55), 1) else null
+            n.item.background = if (sel) k.shape(Colors.alpha(Colors.GREEN, 0x12), 20, Colors.alpha(Colors.GREEN, 0x55), 1) else null
         }
         screens[i].refresh()
         updateCallBar()
@@ -399,6 +448,9 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         speakerBtn.background = circle(if (engine.speaker) Colors.GREEN else Colors.CARD_HI)
         (speakerBtn.tag as ImageView).setColorFilter(if (engine.speaker) Color.BLACK else Colors.TEXT)
         updateCallText()
+        val w = engine.waiting
+        waitingBar.visibility = if (w == null) View.GONE else View.VISIBLE
+        if (w != null) waitingText.text = "${w.name} está a ligar"
         setPulse(st == CallEngine.State.OUTGOING || st == CallEngine.State.INCOMING)
         if (inTab && st == CallEngine.State.ACTIVE && lastState != CallEngine.State.ACTIVE) select(callTabIndex)
         lastState = st
@@ -511,6 +563,23 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         callLayer.addView(hangCol)
 
         root.addView(callLayer, FrameLayout.LayoutParams(-1, -1))
+    }
+
+    /** Aviso sobre tudo quando alguém liga durante uma chamada: o utilizador decide. */
+    private fun buildWaitingBar() {
+        waitingBar = k.card(true)
+        waitingBar.visibility = View.GONE
+        waitingText = k.text("", 16f, Colors.TEXT, true)
+        waitingBar.addView(waitingText)
+        waitingBar.addView(k.muted("Atender termina a chamada atual.", 12f), k.lp(top = 2))
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.addView(k.button("Recusar", Kit.Style.DANGER, true) { engine.rejectWaiting() }, k.lp(0, -2, weight = 1f))
+        row.addView(k.button("Atender", Kit.Style.PRIMARY, true) { engine.answerWaiting() }, k.lp(0, -2, left = 8, weight = 1f))
+        waitingBar.addView(row, k.lp(top = 10))
+        val lp = FrameLayout.LayoutParams(-1, -2, Gravity.TOP)
+        lp.setMargins(k.dp(16), k.dp(48), k.dp(16), 0)
+        root.addView(waitingBar, lp)
     }
 
     private fun showMore() {

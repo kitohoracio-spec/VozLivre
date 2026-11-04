@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.os.ParcelUuid
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -24,6 +25,10 @@ import kotlin.concurrent.thread
  * Bluetooth clássico por RFCOMM. Cada par tem um único socket com enquadramento:
  * [tipo:1][tamanho:2][dados]. Tipo 1 = controlo (texto), tipo 2 = áudio (seq:2 + PCM).
  * O áudio usa 8 kHz para caber na largura de banda do RFCOMM.
+ *
+ * Só aparecem como pares os dispositivos que anunciam o [SERVICE_UUID] da app (ou que já
+ * ligaram a este telemóvel). Auriculares, colunas e outros aparelhos ficam de fora, salvo
+ * se [showAll] estiver ligado.
  */
 @SuppressLint("MissingPermission")
 class BluetoothTransport(private val ctx: Context) : Transport {
@@ -37,6 +42,9 @@ class BluetoothTransport(private val ctx: Context) : Transport {
     override val audioRate: Int = 8000
     @Volatile var listener: TransportListener? = null
 
+    /** Mostra também os dispositivos que não anunciam a app. */
+    @Volatile var showAll: Boolean = false
+
     private class Conn(val socket: BluetoothSocket) {
         val out = DataOutputStream(BufferedOutputStream(socket.outputStream, 4096))
         val inp = DataInputStream(BufferedInputStream(socket.inputStream, 4096))
@@ -48,6 +56,8 @@ class BluetoothTransport(private val ctx: Context) : Transport {
 
     private val conns = ConcurrentHashMap<String, Conn>()
     private val known = ConcurrentHashMap<String, Peer>()
+    private val verified = ConcurrentHashMap.newKeySet<String>()
+    private var uuidReceiver: BroadcastReceiver? = null
     private val io = Executors.newSingleThreadExecutor()
     @Volatile private var serverRunning = false
     private var server: BluetoothServerSocket? = null
@@ -68,7 +78,7 @@ class BluetoothTransport(private val ctx: Context) : Transport {
         refreshBonded()
         thread(name = "bt-server", isDaemon = true) {
             try {
-                val s = a.listenUsingInsecureRfcommWithServiceRecord("VozLivre", SERVICE_UUID)
+                val s = a.listenUsingInsecureRfcommWithServiceRecord("Grfee", SERVICE_UUID)
                 server = s
                 log("À escuta de ligações Bluetooth")
                 while (serverRunning) {
@@ -77,6 +87,7 @@ class BluetoothTransport(private val ctx: Context) : Transport {
                     val id = "bt:" + dev.address
                     log("Ligação recebida de ${safeName(dev)}")
                     known[id] = Peer(id, safeName(dev), PeerKind.BLUETOOTH, "bluetooth", "Ligado")
+                    verified.add(id)
                     register(id, Conn(sock))
                     listener?.onPeersChanged()
                 }
@@ -93,18 +104,57 @@ class BluetoothTransport(private val ctx: Context) : Transport {
         try { server?.close() } catch (_: Exception) {}
         server = null
         stopScan()
+        uuidReceiver?.let { try { ctx.unregisterReceiver(it) } catch (_: Exception) {} }
+        uuidReceiver = null
         for (c in conns.values) try { c.socket.close() } catch (_: Exception) {}
         conns.clear()
     }
 
     // ---------------------------------------------------------------- descoberta
 
+    /** O dispositivo anuncia o serviço da app? Usa a lista de UUID que o Android já tem em cache. */
+    private fun offersService(d: BluetoothDevice): Boolean =
+        try { d.uuids?.any { it.uuid == SERVICE_UUID } == true } catch (_: Exception) { false }
+
+    /** Pede ao dispositivo a lista de serviços. A resposta chega por ACTION_UUID. */
+    private fun probeService(d: BluetoothDevice) {
+        val id = "bt:" + d.address
+        if (offersService(d)) { verified.add(id); return }
+        try { d.fetchUuidsWithSdp() } catch (_: Exception) {}
+    }
+
+    private fun ensureUuidReceiver() {
+        if (uuidReceiver != null) return
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                if (i.action != BluetoothDevice.ACTION_UUID) return
+                val d = deviceFrom(i) ?: return
+                val fromExtra = try {
+                    i.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID)?.any { (it as? ParcelUuid)?.uuid == SERVICE_UUID } == true
+                } catch (_: Exception) { false }
+                if (fromExtra || offersService(d)) {
+                    val id = "bt:" + d.address
+                    if (verified.add(id)) {
+                        if (!known.containsKey(id)) known[id] = Peer(id, safeName(d), PeerKind.BLUETOOTH, "bluetooth", "Encontrado")
+                        listener?.onPeersChanged()
+                    }
+                }
+            }
+        }
+        val f = IntentFilter(BluetoothDevice.ACTION_UUID)
+        if (Build.VERSION.SDK_INT >= 33) ctx.registerReceiver(r, f, Context.RECEIVER_NOT_EXPORTED)
+        else ctx.registerReceiver(r, f)
+        uuidReceiver = r
+    }
+
     fun refreshBonded() {
         val a = adapter ?: return
+        ensureUuidReceiver()
         try {
             for (d in a.bondedDevices ?: emptySet()) {
                 val id = "bt:" + d.address
                 if (!known.containsKey(id)) known[id] = Peer(id, safeName(d), PeerKind.BLUETOOTH, "bluetooth", "Emparelhado")
+                probeService(d)
             }
             listener?.onPeersChanged()
         } catch (e: Exception) { log("Lista de emparelhados falhou: ${e.message}") }
@@ -114,6 +164,7 @@ class BluetoothTransport(private val ctx: Context) : Transport {
         val a = adapter ?: return
         stopScan()
         refreshBonded()
+        ensureUuidReceiver()
         val r = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
                 if (i.action == BluetoothDevice.ACTION_FOUND) {
@@ -122,10 +173,15 @@ class BluetoothTransport(private val ctx: Context) : Transport {
                         val id = "bt:" + d.address
                         val detail = if (d.bondState == BluetoothDevice.BOND_BONDED) "Emparelhado" else "Encontrado"
                         known[id] = Peer(id, safeName(d), PeerKind.BLUETOOTH, "bluetooth", detail)
+                        if (offersService(d)) verified.add(id)
                         listener?.onPeersChanged()
                     }
                 } else if (i.action == BluetoothAdapter.ACTION_DISCOVERY_FINISHED) {
                     log("Procura Bluetooth terminou")
+                    for (p in known.values) {
+                        if (verified.contains(p.id)) continue
+                        try { a.getRemoteDevice(p.id.removePrefix("bt:")).fetchUuidsWithSdp() } catch (_: Exception) {}
+                    }
                 }
             }
         }
@@ -170,12 +226,13 @@ class BluetoothTransport(private val ctx: Context) : Transport {
                 val dev = a.getRemoteDevice(peerId.removePrefix("bt:"))
                 val sock = dev.createInsecureRfcommSocketToServiceRecord(SERVICE_UUID)
                 sock.connect()
+                verified.add(peerId)
                 register(peerId, Conn(sock))
                 log("Ligado a ${safeName(dev)}")
                 cb(true, null)
             } catch (e: Exception) {
                 log("Ligação falhou: ${e.message}")
-                cb(false, "o outro telemóvel precisa de ter o VozLivre aberto com Bluetooth ativo")
+                cb(false, "o outro telemóvel precisa de ter o Grfee aberto com Bluetooth ativo")
             }
         }
     }
@@ -194,7 +251,7 @@ class BluetoothTransport(private val ctx: Context) : Transport {
     }
 
     override fun peers(): List<Peer> =
-        known.values.map {
+        known.values.filter { showAll || verified.contains(it.id) || conns.containsKey(it.id) }.map {
             if (conns.containsKey(it.id)) it.copy(detail = "Ligado") else it
         }.sortedWith(compareBy({ it.detail != "Ligado" }, { it.name }))
 

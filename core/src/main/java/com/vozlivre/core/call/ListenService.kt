@@ -36,7 +36,7 @@ class ListenService : Service() {
         )
         val n: Notification = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_phone_call)
-            .setContentTitle("VozLivre")
+            .setContentTitle("Grfee")
             .setContentText("À escuta de chamadas")
             .setContentIntent(open)
             .setOngoing(true)

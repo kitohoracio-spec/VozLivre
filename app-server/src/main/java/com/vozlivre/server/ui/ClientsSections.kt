@@ -39,7 +39,7 @@ class ClientsTabSection(private val k: Kit, private val engine: ServerEngine, pr
         val busy = engine.state != CallEngine.State.IDLE
         when (tab) {
             0 -> {
-                if (linked.isEmpty()) list.addView(k.muted("Nenhum cliente encontrado. Abre o VozLivre em modo Cliente nos outros telemóveis."))
+                if (linked.isEmpty()) list.addView(k.muted("Nenhum cliente encontrado. Abre o Grfee Cliente nos outros telemóveis."))
                 for (p in linked) {
                     val call = k.button("Ligar", Kit.Style.PRIMARY, true) { host.withPerms(host.micPerms()) { engine.startCall(p) } }
                     call.isEnabled = !busy

@@ -9,6 +9,7 @@ import com.vozlivre.core.ui.PeersTableSection
 import com.vozlivre.core.ui.Screen
 import com.vozlivre.server.ui.CallsTabSection
 import com.vozlivre.server.ui.ClientsTabSection
+import com.vozlivre.server.ui.PairingSection
 import com.vozlivre.server.ui.ServerDiagnosticsSection
 import com.vozlivre.server.ui.ServerSessionSection
 import com.vozlivre.server.ui.ServerTilesSection
@@ -33,7 +34,8 @@ class ServerActivity : BaseActivity() {
         NavTab(R.drawable.ic_wifi, "Ligações", Screen(k, listOf(
             LogoSection(k, "Servidor"),
             ServerSessionSection(k, engine),
-            ServerTilesSection(k, engine, this)
+            ServerTilesSection(k, engine, this),
+            PairingSection(k, engine)
         ))),
         NavTab(R.drawable.ic_people, "Clientes", Screen(k, listOf(
             header(R.drawable.ic_people, "Clientes"),

@@ -22,7 +22,7 @@ O servidor decide quem pode ligar (bloqueios e aprovação manual). O cliente es
 
 Barra inferior com cinco separadores.
 
-- Ligações: logótipo, cartão de sessão ativa (online e tempo) e mosaicos com clientes ligados, chamadas ativas, pedidos pendentes e tipo de rede.
+- Ligações: logótipo, cartão de sessão ativa (online e tempo), mosaicos com clientes ligados, chamadas ativas, pedidos pendentes e tipo de rede, e o código QR para ligar clientes.
 - Clientes: Ligados, Pendentes e Histórico. Em Ligados, o botão Ligar chama o cliente. Em Pendentes, Aceitar ou Recusar.
 - Chamadas: Ativas, Recentes e Registos. A chamada ativa tem silenciar, altifalante e terminar. Fora deste separador, uma barra verde leva de volta à chamada.
 - Diagnóstico: estado geral, verificações de rede, descoberta, permissões, sinalização e áudio, tabela de pares e registo com Copiar e Limpar.
@@ -32,12 +32,18 @@ Barra inferior com cinco separadores.
 
 Barra inferior com quatro separadores.
 
-- Ligação: estado da ligação ao servidor, lista de servidores encontrados, ligação por IP, Wi-Fi Direct e Bluetooth (recolhidos), nome e senha.
+- Ligação: estado da ligação ao servidor, botão Ler QR do servidor, lista de servidores encontrados, ligação por IP, Wi-Fi Direct e Bluetooth (recolhidos), nome e senha.
 - Chamadas: Recentes e Favoritos, com o botão Nova chamada que liga ao servidor escolhido.
 - Áudio: volume do altifalante, ganho do microfone, saída de áudio e dados de qualidade.
 - Estado: servidor, tipo de ligação, IP local, força do sinal, tempo de ligação, permissões, segundo plano e créditos.
 
 Em chamada, o cliente vê o ecrã de chamada com temporizador, microfone, altifalante e terminar.
+
+## Ligar por QR
+
+No Servidor, no separador Ligações, toca em Mostrar código QR. No Cliente, toca em Ler QR do servidor e aponta a câmara. O cliente fica com o servidor escolhido, os IPs dele sondados e a senha igual, sem escrever nada. A câmara só é pedida quando tocas no botão.
+
+O QR contém a senha do servidor. Mostra-o só a quem deve ter acesso e não o fotografes. Se mudares a senha ou a rede do servidor, o código muda sozinho.
 
 ## Quem pode ligar a quem
 
@@ -68,9 +74,9 @@ GitHub Actions: o fluxo `Build VozLivre APKs` corre os testes e compila os dois 
 ## Como testar
 
 1. Instala a app Servidor num telemóvel e a app Cliente noutro.
-2. Define a mesma senha nos dois (Servidor: Definições, Segurança. Cliente: separador Ligação).
+2. Define a mesma senha nos dois (Servidor: Definições, Segurança. Cliente: separador Ligação), ou salta este passo e usa o QR do passo 4.
 3. Liga os dois à mesma rede, ou usa o hotspot de um deles. Com Wi-Fi Direct, no Servidor abre Gestão da rede e toca em Criar grupo. No Cliente abre Wi-Fi Direct e Bluetooth, toca em Procurar e depois em Ligar.
-4. No Cliente toca em Procurar servidores e escolhe o servidor. Depois usa Nova chamada. No Servidor, liga a um cliente no separador Clientes.
+4. No Servidor toca em Mostrar código QR e no Cliente em Ler QR do servidor. Sem QR, toca em Procurar servidores e escolhe o servidor. Depois usa Nova chamada. No Servidor, liga a um cliente no separador Clientes.
 
 As duas apps usam as mesmas portas UDP (39871 e 39872). Para testar, instala cada uma num telemóvel diferente.
 
@@ -94,6 +100,8 @@ Os comandos de chamada e o áudio vão cifrados com AES-256-GCM, com chave deriv
 ## Áudio
 
 PCM de 16 bits comprimido com G.711 µ-law, em frames de 20 ms. Wi-Fi a 16 kHz, Bluetooth a 8 kHz.
+
+O microfone usa cancelamento de eco, supressão de ruído e controlo automático de ganho nos telemóveis que os têm. A fila de reprodução guarda no máximo 100 ms: quando a rede entrega uma rajada, os frames mais antigos são descartados para a conversa não ficar atrasada. Na chamada, o botão Altifalante liga a saída de volume alto, e o ganho do microfone (separador Áudio) sobe até 4 vezes.
 
 ## Limitações
 

@@ -116,7 +116,7 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
     var defaultSpeaker: Boolean = prefs.getBoolean("default_speaker", false)
         private set
 
-    var micPercent: Int = prefs.getInt("mic_pct", 50)
+    var micPercent: Int = prefs.getInt("mic_pct", 60)
         private set
 
     val usingDefaultPassword: Boolean get() = prefs.getString("pw", "").isNullOrBlank()
@@ -192,7 +192,7 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
     fun setMicPercent(p: Int) {
         micPercent = p
         prefs.edit().putInt("mic_pct", p).apply()
-        audio?.gain = p / 50f
+        audio?.gain = micGain(p)
     }
 
     // ---------------------------------------------------------------- estado da rede
@@ -434,7 +434,7 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
             t.sendAudio(p.id, seq, sealed, sealed.size)
         }
         a.muted = muted
-        a.gain = micPercent / 50f
+        a.gain = micGain(micPercent)
         val err = a.start()
         if (err != null) { log(err); ui?.onToast(err); finish(err, true); return }
         a.setSpeaker(speaker)
@@ -544,6 +544,10 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
         try { wifiLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}
         wifiLock = null
     }
+
+    /** 50% é o ganho normal (1x). De 50% a 100% sobe até 4x. */
+    private fun micGain(percent: Int): Float =
+        if (percent <= 50) percent / 50f else 1f + (percent - 50) / 50f * 3f
 
     private fun newCallId() = UUID.randomUUID().toString().take(6)
 }

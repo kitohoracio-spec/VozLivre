@@ -54,6 +54,10 @@ Controlo (UDP, texto):
 
 Bluetooth: um socket RFCOMM por par, com frames `[tipo:1][tamanho:2][dados]`. Tipo 1 é controlo e tipo 2 é áudio (`seq:2` mais o mesmo envelope cifrado).
 
+## Ligação por QR
+
+O servidor gera `vozlivre://join?v=1&id=..&n=..&ip=a,b&pw=..` (`Pairing`, no pacote `net`), com cada valor codificado como URL. `ServerEngine.pairingPayload()` junta o id, o nome, os IPv4 das redes ativas e a senha. O cliente lê o texto com a biblioteca zxing-android-embedded, `Pairing.decode` valida-o (versão, id e só IPv4 numéricos) e `ClientEngine.joinServer` define a senha, escolhe o servidor e sonda os IPs. A leitura corre em `PortraitCaptureActivity`, uma subclasse da captura da biblioteca que permite o retrato.
+
 ## Protocolo de chamada
 
 Comandos de controlo, cifrados, separados por `|`:

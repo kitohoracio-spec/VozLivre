@@ -6,6 +6,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.vozlivre.client.ClientEngine
 import com.vozlivre.core.R
+import com.vozlivre.core.net.Pairing
 import com.vozlivre.core.ui.BtSection
 import com.vozlivre.core.ui.Colors
 import com.vozlivre.core.ui.Host
@@ -25,6 +26,18 @@ class ClientConnectionSection(private val k: Kit, private val engine: ClientEngi
     init {
         content.orientation = LinearLayout.VERTICAL
         card.addView(content)
+    }
+
+    private fun scanQr() {
+        host.scanQr { text ->
+            val info = Pairing.decode(text)
+            if (info == null) {
+                host.toast("Este QR não é de um servidor VozLivre")
+            } else {
+                engine.joinServer(info)
+                host.toast("A ligar a ${info.name}...")
+            }
+        }
     }
 
     override fun refresh() {
@@ -51,11 +64,13 @@ class ClientConnectionSection(private val k: Kit, private val engine: ClientEngi
         } else if (engine.serverId != null) {
             content.addView(k.text("Servidor fora de alcance", 18f, Colors.AMBER, true))
             content.addView(k.muted("O servidor escolhido não está visível. Procura de novo."), k.lp(top = 6))
-            content.addView(k.button("Procurar servidores") { host.scanAll() }, k.lp(top = 14))
+            content.addView(k.button("Ler QR do servidor") { scanQr() }, k.lp(top = 14))
+            content.addView(k.button("Procurar servidores", Kit.Style.SECONDARY) { host.scanAll() }, k.lp(top = 8))
         } else {
             content.addView(k.text("Sem servidor escolhido", 18f, Colors.TEXT, true))
-            content.addView(k.muted("Procura e escolhe um servidor na lista abaixo."), k.lp(top = 6))
-            content.addView(k.button("Procurar servidores") { host.scanAll() }, k.lp(top = 14))
+            content.addView(k.muted("Lê o QR do servidor, ou procura e escolhe um na lista abaixo."), k.lp(top = 6))
+            content.addView(k.button("Ler QR do servidor") { scanQr() }, k.lp(top = 14))
+            content.addView(k.button("Procurar servidores", Kit.Style.SECONDARY) { host.scanAll() }, k.lp(top = 8))
         }
     }
 }

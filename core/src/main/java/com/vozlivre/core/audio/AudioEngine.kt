@@ -11,6 +11,7 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AudioEffect
+import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 import android.os.Process
 import java.util.concurrent.ArrayBlockingQueue
@@ -26,9 +27,17 @@ class AudioEngine(
     private val rate: Int,
     private val sink: (ByteArray, Int) -> Unit
 ) {
+    private companion object {
+        /** Capacidade da fila de reprodução, em frames de 20 ms. */
+        const val MAX_QUEUE = 8
+
+        /** Acima disto (100 ms) a fila é cortada para manter a conversa em tempo real. */
+        const val MAX_BACKLOG = 5
+    }
+
     private val frameBytes = rate / 50 * 2
     private val am = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    private val queue = ArrayBlockingQueue<ByteArray>(12)
+    private val queue = ArrayBlockingQueue<ByteArray>(MAX_QUEUE)
     private val effects = ArrayList<AudioEffect>()
     private var record: AudioRecord? = null
     private var track: AudioTrack? = null
@@ -57,6 +66,7 @@ class AudioEngine(
                 return "Microfone indisponível (outra app a usá-lo?)"
             }
             try { if (AcousticEchoCanceler.isAvailable()) AcousticEchoCanceler.create(rec.audioSessionId)?.let { it.enabled = true; effects.add(it) } } catch (_: Exception) {}
+            try { if (AutomaticGainControl.isAvailable()) AutomaticGainControl.create(rec.audioSessionId)?.let { it.enabled = true; effects.add(it) } } catch (_: Exception) {}
             try { if (NoiseSuppressor.isAvailable()) NoiseSuppressor.create(rec.audioSessionId)?.let { it.enabled = true; effects.add(it) } } catch (_: Exception) {}
 
             val minOut = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -84,7 +94,7 @@ class AudioEngine(
             rec.startRecording()
             trk.play()
             val silence = ByteArray(frameBytes)
-            repeat(3) { trk.write(silence, 0, silence.size) }
+            repeat(2) { trk.write(silence, 0, silence.size) }
 
             capThread = thread(name = "voz-capture", isDaemon = true) {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
@@ -142,6 +152,8 @@ class AudioEngine(
             queue.poll()
             queue.offer(pcm)
         }
+        // Se a rede entregou uma rajada, descarta os frames mais antigos em vez de os tocar atrasados.
+        while (queue.size > MAX_BACKLOG) queue.poll()
     }
 
     @Suppress("DEPRECATION")

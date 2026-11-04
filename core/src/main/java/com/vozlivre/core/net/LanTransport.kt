@@ -121,6 +121,10 @@ class LanTransport(
         return l?.addr?.hostAddress ?: "-"
     }
 
+    /** Endereços IPv4 deste telemóvel nas redes ativas, com o Wi-Fi Direct primeiro. */
+    fun localIps(): List<String> =
+        links.values.sortedBy { if (it.isP2pLink()) 0 else 1 }.map { it.addr.hostAddress.orEmpty() }.filter { it.isNotEmpty() }
+
     fun describeLinks(): String {
         if (links.isEmpty()) return "Sem rede local ativa"
         return links.values.sortedBy { it.ifName }.joinToString("\n") { "${it.ifName}: ${it.addr.hostAddress}/${it.prefix}" }

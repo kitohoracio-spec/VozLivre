@@ -27,6 +27,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.google.zxing.integration.android.IntentIntegrator
 import com.vozlivre.core.R
 import com.vozlivre.core.call.CallEngine
 
@@ -77,6 +78,7 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
 
     private val pending = HashMap<Int, () -> Unit>()
     private var reqCode = 100
+    private var qrCallback: ((String) -> Unit)? = null
 
     // ecrã de chamada
     private lateinit var callLayer: LinearLayout
@@ -172,11 +174,31 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        val qr = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
+        if (qr != null) {
+            val text = qr.contents
+            val cb = qrCallback
+            qrCallback = null
+            if (text != null && cb != null) cb(text)
+        }
         if (requestCode == REQ_ENABLE_BT && resultCode == RESULT_OK) {
             engine.startBluetooth()
             engine.bt.startScan()
         }
         currentScreen()?.refresh()
+    }
+
+    override fun scanQr(onResult: (String) -> Unit) {
+        withPerms(listOf(Manifest.permission.CAMERA)) {
+            qrCallback = onResult
+            IntentIntegrator(this)
+                .setCaptureActivity(PortraitCaptureActivity::class.java)
+                .setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+                .setOrientationLocked(false)
+                .setBeepEnabled(false)
+                .setPrompt("Aponta para o QR do servidor")
+                .initiateScan()
+        }
     }
 
     override fun scanBluetooth() {

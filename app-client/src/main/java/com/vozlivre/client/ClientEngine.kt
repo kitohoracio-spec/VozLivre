@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import com.vozlivre.core.call.CallEngine
 import com.vozlivre.core.call.Screening
+import com.vozlivre.core.net.PairingInfo
 import com.vozlivre.core.net.Peer
 import com.vozlivre.core.net.PeerKind
 import com.vozlivre.core.net.Role
@@ -43,6 +44,15 @@ class ClientEngine(app: Context) : CallEngine(app, Role.CLIENT) {
         serverId = id
         prefs.edit().apply { if (id == null) remove("server_id") else putString("server_id", id) }.apply()
         notifyPeersChanged()
+    }
+
+    /** Configura o cliente a partir de um QR do servidor: senha, servidor escolhido e sondagem dos IPs. */
+    fun joinServer(info: PairingInfo) {
+        setPassword(info.password)
+        selectServer(info.id)
+        for (ip in info.ips) lan.probe(ip)
+        lan.wake()
+        log("Ligação por QR ao servidor ${info.name} (${info.id})")
     }
 
     /** Segundos desde que o servidor escolhido ficou visível, ou -1 se não está visível. */

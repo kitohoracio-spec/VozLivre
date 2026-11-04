@@ -58,6 +58,7 @@ interface Host {
     fun goTo(index: Int)
     fun getVolume(): Int
     fun setVolume(pct: Int)
+    fun scanQr(onResult: (String) -> Unit)
     fun registerLog(s: LogSection)
     fun openSub(title: String, icon: Int, sections: List<Section>)
 }

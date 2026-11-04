@@ -172,7 +172,7 @@ class AudioSettingsSection(private val k: Kit, private val engine: CallEngine, p
         })
         root.addView(control(R.drawable.ic_speaker, "Volume do altifalante", volValue, volSeek), k.lp(bottom = 12))
         root.addView(control(R.drawable.ic_mic, "Microfone", micValue, micSeek), k.lp(bottom = 4))
-        root.addView(k.muted("No microfone, 50% é o ganho normal e 100% duplica o nível.", 12f), k.lp(bottom = 12))
+        root.addView(k.muted("No microfone, 50% é o ganho normal e 100% quadruplica o nível. Sobe se a outra pessoa te ouve baixo.", 12f), k.lp(bottom = 12))
 
         val out = k.card()
         out.addView(k.text("Saída de áudio", 15f, Colors.TEXT, true))

@@ -3,6 +3,8 @@ package com.vozlivre.server
 import android.content.Context
 import com.vozlivre.core.call.CallEngine
 import com.vozlivre.core.call.Screening
+import com.vozlivre.core.net.Pairing
+import com.vozlivre.core.net.PairingInfo
 import com.vozlivre.core.net.Peer
 import com.vozlivre.core.net.Role
 
@@ -29,6 +31,12 @@ class ServerEngine(app: Context) : CallEngine(app, Role.SERVER) {
 
     /** Pares que não são servidores (clientes e dispositivos Bluetooth). */
     fun clients(): List<Peer> = allPeers().filter { !it.isServer }
+
+    // ---------------------------------------------------------------- ligação por QR
+
+    /** Texto do QR que o cliente lê para ficar configurado: id, IPs e senha deste servidor. */
+    fun pairingPayload(): String =
+        Pairing.encode(PairingInfo(myId, displayName, lan.localIps(), prefs.getString("pw", "") ?: ""))
 
     // ---------------------------------------------------------------- bloqueios
 

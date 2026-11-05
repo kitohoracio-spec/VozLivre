@@ -10,10 +10,12 @@ import com.vozlivre.core.net.PeerKind
 import com.vozlivre.core.net.Role
 
 /**
- * Motor do Cliente: escolha do servidor e favoritos.
+ * Motor do Cliente: escolha do servidor, contactos e favoritos.
  * O protocolo de chamada e o áudio vêm do [CallEngine].
  *
- * O cliente só fala com servidores: chamadas de outros clientes são ignoradas.
+ * O cliente fala com o servidor escolhido e com os outros clientes desse servidor.
+ * Chamadas de clientes de outro servidor são ignoradas. Pedidos de escuta só valem se
+ * vierem do servidor escolhido e dependem sempre de o utilizador tocar em Permitir.
  */
 class ClientEngine(app: Context) : CallEngine(app, Role.CLIENT) {
 
@@ -43,8 +45,21 @@ class ClientEngine(app: Context) : CallEngine(app, Role.CLIENT) {
     fun selectServer(id: String?) {
         serverId = id
         prefs.edit().apply { if (id == null) remove("server_id") else putString("server_id", id) }.apply()
+        lan.wake()
         notifyPeersChanged()
     }
+
+    /** Anuncia aos outros o servidor escolhido, para os clientes do mesmo servidor se verem. */
+    override fun groupId(): String = serverId ?: ""
+
+    /** Outros clientes que escolheram o mesmo servidor. */
+    fun members(): List<Peer> {
+        val id = serverId ?: return emptyList()
+        return allPeers().filter { it.isClient && it.group == id }
+    }
+
+    /** Com quem se pode falar: o servidor escolhido e os outros clientes dele. */
+    fun contacts(): List<Peer> = listOfNotNull(selectedServerPeer()) + members()
 
     /** Configura o cliente a partir de um QR do servidor: senha, servidor escolhido e sondagem dos IPs. */
     fun joinServer(info: PairingInfo) {
@@ -77,11 +92,15 @@ class ClientEngine(app: Context) : CallEngine(app, Role.CLIENT) {
 
     // ---------------------------------------------------------------- regras de chamada
 
-    override fun screenIncoming(peerId: String, peer: Peer?): Screening =
-        if (peer != null && peer.isClient) {
-            log("Chamada de outro cliente ignorada: ${peer.name}")
+    override fun screenIncoming(peerId: String, peer: Peer?, listen: Boolean): Screening = when {
+        listen && peerId != serverId -> {
+            log("Pedido de escuta ignorado: não vem do servidor escolhido")
             Screening.IGNORE
-        } else {
-            Screening.ALLOW
         }
+        peer != null && peer.isClient && (serverId == null || peer.group != serverId) -> {
+            log("Chamada de ${peer.name} ignorada: não é do mesmo servidor")
+            Screening.IGNORE
+        }
+        else -> Screening.ALLOW
+    }
 }

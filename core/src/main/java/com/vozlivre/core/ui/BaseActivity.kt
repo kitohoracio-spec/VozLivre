@@ -29,7 +29,9 @@ import android.widget.TextView
 import android.widget.Toast
 import com.google.zxing.integration.android.IntentIntegrator
 import com.vozlivre.core.R
+import com.vozlivre.core.audio.AudioRoute
 import com.vozlivre.core.call.CallEngine
+import com.vozlivre.core.net.Role
 
 /** Um separador da barra inferior. */
 class NavTab(val icon: Int, val label: String, val screen: Screen)
@@ -97,6 +99,10 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
     private lateinit var hangCol: LinearLayout
     private lateinit var muteBtn: FrameLayout
     private lateinit var speakerBtn: FrameLayout
+    private lateinit var speakerLabel: TextView
+    private lateinit var speakerCol: LinearLayout
+    private lateinit var muteCol: LinearLayout
+    private lateinit var answerLabel: TextView
     private var pulse: ObjectAnimator? = null
 
     // aviso de segunda chamada
@@ -117,6 +123,8 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         engine.start()
         val base = ArrayList<String>(micPerms())
         base.addAll(notifPerms())
+        // Sem esta permissão o Android não deixa usar o auricular Bluetooth na chamada.
+        if (Build.VERSION.SDK_INT >= 31) base.add(Manifest.permission.BLUETOOTH_CONNECT)
         withPerms(base) { }
         if (allGranted(btPerms())) engine.startBluetooth()
         showMain()
@@ -445,8 +453,21 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         toolsRow.visibility = if (st == CallEngine.State.ACTIVE) View.VISIBLE else View.GONE
         muteBtn.background = circle(if (engine.muted) Colors.RED else Colors.CARD_HI)
         (muteBtn.tag as ImageView).setColorFilter(if (engine.muted) Color.WHITE else Colors.TEXT)
-        speakerBtn.background = circle(if (engine.speaker) Colors.GREEN else Colors.CARD_HI)
-        (speakerBtn.tag as ImageView).setColorFilter(if (engine.speaker) Color.BLACK else Colors.TEXT)
+        val routed = engine.route != AudioRoute.EARPIECE
+        speakerBtn.background = circle(if (routed) Colors.GREEN else Colors.CARD_HI)
+        val speakerIcon = speakerBtn.tag as ImageView
+        speakerIcon.setImageResource(if (engine.route == AudioRoute.BLUETOOTH) R.drawable.ic_bluetooth else R.drawable.ic_speaker)
+        speakerIcon.setColorFilter(if (routed) Color.BLACK else Colors.TEXT)
+        speakerLabel.text = when (engine.route) {
+            AudioRoute.EARPIECE -> "Auricular"
+            AudioRoute.SPEAKER -> "Altifalante"
+            else -> "Bluetooth"
+        }
+        // Escuta: o servidor só ouve (sem microfone) e o cliente só envia (sem altifalante).
+        val listening = engine.listenMode
+        answerLabel.text = if (listening) "Permitir" else "Atender"
+        muteCol.visibility = if (listening && engine.role == Role.SERVER) View.GONE else View.VISIBLE
+        speakerCol.visibility = if (listening && engine.role == Role.CLIENT) View.GONE else View.VISIBLE
         updateCallText()
         val w = engine.waiting
         waitingBar.visibility = if (w == null) View.GONE else View.VISIBLE
@@ -541,12 +562,15 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         callLayer.addView(View(this), k.lp(-1, 0, weight = 1f))
 
         muteBtn = round(R.drawable.ic_mic, Colors.CARD_HI, tint = Colors.TEXT) { engine.toggleMute() }
-        speakerBtn = round(R.drawable.ic_speaker, Colors.CARD_HI, tint = Colors.TEXT) { engine.toggleSpeaker() }
+        speakerBtn = round(R.drawable.ic_speaker, Colors.CARD_HI, tint = Colors.TEXT) { engine.cycleRoute() }
         val moreBtn = round(R.drawable.ic_more, Colors.CARD_HI, tint = Colors.TEXT) { showMore() }
         toolsRow = LinearLayout(this)
         toolsRow.orientation = LinearLayout.HORIZONTAL
-        toolsRow.addView(labeled(muteBtn, "Microfone", 1f))
-        toolsRow.addView(labeled(speakerBtn, "Altifalante", 1f))
+        muteCol = labeled(muteBtn, "Microfone", 1f)
+        toolsRow.addView(muteCol)
+        speakerCol = labeled(speakerBtn, "Auricular", 1f)
+        speakerLabel = speakerCol.getChildAt(1) as TextView
+        toolsRow.addView(speakerCol)
         toolsRow.addView(labeled(moreBtn, "Mais", 1f))
         callLayer.addView(toolsRow, k.lp(bottom = 28))
 
@@ -555,7 +579,9 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         incomingRow = LinearLayout(this)
         incomingRow.orientation = LinearLayout.HORIZONTAL
         incomingRow.addView(labeled(reject, "Recusar", 1f))
-        incomingRow.addView(labeled(answer, "Atender", 1f))
+        val answerCol = labeled(answer, "Atender", 1f)
+        answerLabel = answerCol.getChildAt(1) as TextView
+        incomingRow.addView(answerCol)
         callLayer.addView(incomingRow)
 
         val hang = round(R.drawable.ic_call, Colors.RED, 135f, glow = true) { engine.hangup() }
@@ -633,7 +659,11 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
     private fun updateCallText() {
         if (engine.state == CallEngine.State.ACTIVE) {
             val s = ((SystemClock.elapsedRealtime() - engine.activeSince) / 1000).toInt()
-            callTop.text = "Chamada em curso"
+            callTop.text = when {
+                !engine.listenMode -> "Chamada em curso"
+                engine.role == Role.SERVER -> "A escutar"
+                else -> "O servidor está a escutar o teu microfone"
+            }
             callTimer.text = formatHms(s)
             callTimer.visibility = View.VISIBLE
         } else {

@@ -3,16 +3,12 @@ package com.vozlivre.client.ui
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
-import android.widget.TextView
 import com.vozlivre.client.ClientEngine
 import com.vozlivre.core.R
 import com.vozlivre.core.net.Pairing
-import com.vozlivre.core.ui.BtSection
 import com.vozlivre.core.ui.Colors
-import com.vozlivre.core.ui.DeviceFilterSection
 import com.vozlivre.core.ui.Host
 import com.vozlivre.core.ui.Kit
-import com.vozlivre.core.ui.P2pSection
 import com.vozlivre.core.ui.Section
 import com.vozlivre.core.ui.manualIpRow
 import com.vozlivre.core.ui.peerRow
@@ -27,6 +23,12 @@ class ClientConnectionSection(private val k: Kit, private val engine: ClientEngi
     init {
         content.orientation = LinearLayout.VERTICAL
         card.addView(content)
+    }
+
+    /** Procura simples na rede local. Sem pedidos de permissões extra. */
+    private fun search() {
+        engine.lan.wake()
+        host.toast("A procurar servidores...")
     }
 
     private fun scanQr() {
@@ -66,12 +68,12 @@ class ClientConnectionSection(private val k: Kit, private val engine: ClientEngi
             content.addView(k.text("Servidor fora de alcance", 18f, Colors.AMBER, true))
             content.addView(k.muted("O servidor escolhido não está visível. Procura de novo."), k.lp(top = 6))
             content.addView(k.button("Ler QR do servidor") { scanQr() }, k.lp(top = 14))
-            content.addView(k.button("Procurar servidores", Kit.Style.SECONDARY) { host.scanAll() }, k.lp(top = 8))
+            content.addView(k.button("Procurar servidores", Kit.Style.SECONDARY) { search() }, k.lp(top = 8))
         } else {
             content.addView(k.text("Sem servidor escolhido", 18f, Colors.TEXT, true))
             content.addView(k.muted("Lê o QR do servidor, ou procura e escolhe um na lista abaixo."), k.lp(top = 6))
             content.addView(k.button("Ler QR do servidor") { scanQr() }, k.lp(top = 14))
-            content.addView(k.button("Procurar servidores", Kit.Style.SECONDARY) { host.scanAll() }, k.lp(top = 8))
+            content.addView(k.button("Procurar servidores", Kit.Style.SECONDARY) { search() }, k.lp(top = 8))
         }
     }
 }
@@ -107,37 +109,5 @@ class ServerListSection(private val k: Kit, private val engine: ClientEngine, pr
             }
             list.addView(k.peerRow(p, b), k.lp(bottom = 8))
         }
-    }
-}
-
-/** Outros métodos de ligação, recolhidos por defeito para manter o ecrã simples. */
-class OtherMethodsSection(private val k: Kit, private val engine: ClientEngine, private val host: Host) : Section() {
-    private val card = k.card()
-    private val body = LinearLayout(k.ctx)
-    private val p2p = P2pSection(k, engine, host, false)
-    private val bt = BtSection(k, engine, host)
-    private val filter = DeviceFilterSection(k, engine)
-    private val toggle: TextView
-    override val view: View get() = card
-
-    init {
-        body.orientation = LinearLayout.VERTICAL
-        body.visibility = View.GONE
-        body.addView(p2p.view, k.lp(top = 12))
-        body.addView(bt.view, k.lp(top = 12))
-        body.addView(filter.view, k.lp(top = 12))
-        toggle = k.pill("Mostrar")
-        card.addView(k.sectionTitle(R.drawable.ic_wifi, "Wi-Fi Direct e Bluetooth", toggle))
-        card.addView(body)
-        card.setOnClickListener {
-            val open = body.visibility != View.VISIBLE
-            body.visibility = if (open) View.VISIBLE else View.GONE
-            toggle.text = if (open) "Esconder" else "Mostrar"
-            refresh()
-        }
-    }
-
-    override fun refresh() {
-        if (body.visibility == View.VISIBLE) { p2p.refresh(); bt.refresh(); filter.refresh() }
     }
 }

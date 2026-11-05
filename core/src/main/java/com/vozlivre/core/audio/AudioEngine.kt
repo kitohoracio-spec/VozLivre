@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
+import android.os.Build
+import android.media.AudioDeviceInfo
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
@@ -25,6 +27,10 @@ import kotlin.concurrent.thread
 class AudioEngine(
     private val ctx: Context,
     private val rate: Int,
+    /** Capta o microfone e entrega cada frame a [sink]. Desligado, o microfone nem é aberto. */
+    private val capture: Boolean = true,
+    /** Toca o áudio recebido. Desligado, a saída de som nem é aberta. */
+    private val playback: Boolean = true,
     private val sink: (ByteArray, Int) -> Unit
 ) {
     private companion object {
@@ -51,73 +57,89 @@ class AudioEngine(
 
     /** Devolve uma mensagem de erro, ou null se arrancou bem. */
     fun start(): String? {
-        if (ctx.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+        if (capture && ctx.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
             return "Sem permissão de microfone"
         try {
             oldMode = am.mode
             am.mode = AudioManager.MODE_IN_COMMUNICATION
-            val minIn = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            val rec = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION, rate,
-                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minIn, frameBytes * 4)
-            )
-            if (rec.state != AudioRecord.STATE_INITIALIZED) {
-                rec.release(); am.mode = oldMode
-                return "Microfone indisponível (outra app a usá-lo?)"
-            }
-            try { if (AcousticEchoCanceler.isAvailable()) AcousticEchoCanceler.create(rec.audioSessionId)?.let { it.enabled = true; effects.add(it) } } catch (_: Exception) {}
-            try { if (AutomaticGainControl.isAvailable()) AutomaticGainControl.create(rec.audioSessionId)?.let { it.enabled = true; effects.add(it) } } catch (_: Exception) {}
-            try { if (NoiseSuppressor.isAvailable()) NoiseSuppressor.create(rec.audioSessionId)?.let { it.enabled = true; effects.add(it) } } catch (_: Exception) {}
 
-            val minOut = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            val trk = AudioTrack.Builder()
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
+            var rec: AudioRecord? = null
+            if (capture) {
+                val minIn = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                val r = AudioRecord(
+                    MediaRecorder.AudioSource.VOICE_COMMUNICATION, rate,
+                    AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minIn, frameBytes * 4)
                 )
-                .setAudioFormat(
-                    AudioFormat.Builder().setSampleRate(rate)
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()
-                )
-                .setBufferSizeInBytes(maxOf(minOut, frameBytes * 6))
-                .setTransferMode(AudioTrack.MODE_STREAM)
-                .build()
-            if (trk.state != AudioTrack.STATE_INITIALIZED) {
-                rec.release(); trk.release(); am.mode = oldMode
-                return "Altifalante indisponível"
+                if (r.state != AudioRecord.STATE_INITIALIZED) {
+                    r.release(); am.mode = oldMode
+                    return "Microfone indisponível (outra app a usá-lo?)"
+                }
+                try { if (AcousticEchoCanceler.isAvailable()) AcousticEchoCanceler.create(r.audioSessionId)?.let { it.enabled = true; effects.add(it) } } catch (_: Exception) {}
+                try { if (AutomaticGainControl.isAvailable()) AutomaticGainControl.create(r.audioSessionId)?.let { it.enabled = true; effects.add(it) } } catch (_: Exception) {}
+                try { if (NoiseSuppressor.isAvailable()) NoiseSuppressor.create(r.audioSessionId)?.let { it.enabled = true; effects.add(it) } } catch (_: Exception) {}
+                rec = r
             }
+
+            var trk: AudioTrack? = null
+            if (playback) {
+                val minOut = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                val t = AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder().setSampleRate(rate)
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()
+                    )
+                    .setBufferSizeInBytes(maxOf(minOut, frameBytes * 6))
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build()
+                if (t.state != AudioTrack.STATE_INITIALIZED) {
+                    rec?.release(); t.release(); am.mode = oldMode
+                    return "Altifalante indisponível"
+                }
+                trk = t
+            }
+
             record = rec; track = trk
             queue.clear(); lastSeq = -1
             running = true
-            rec.startRecording()
-            trk.play()
-            val silence = ByteArray(frameBytes)
-            repeat(2) { trk.write(silence, 0, silence.size) }
+            rec?.startRecording()
+            if (trk != null) {
+                trk.play()
+                val silence = ByteArray(frameBytes)
+                repeat(2) { trk.write(silence, 0, silence.size) }
+            }
 
-            capThread = thread(name = "voz-capture", isDaemon = true) {
-                Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
-                val buf = ByteArray(frameBytes)
-                while (running) {
-                    var off = 0
-                    while (off < frameBytes && running) {
-                        val n = rec.read(buf, off, frameBytes - off)
-                        if (n < 0) { running = false; break }
-                        off += n
-                    }
-                    if (running && off == frameBytes && !muted) {
-                        val g = gain
-                        if (g != 1f) applyGain(buf, frameBytes, g)
-                        try { sink(buf, frameBytes) } catch (_: Exception) {}
+            if (rec != null) {
+                capThread = thread(name = "voz-capture", isDaemon = true) {
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
+                    val buf = ByteArray(frameBytes)
+                    while (running) {
+                        var off = 0
+                        while (off < frameBytes && running) {
+                            val n = rec.read(buf, off, frameBytes - off)
+                            if (n < 0) { running = false; break }
+                            off += n
+                        }
+                        if (running && off == frameBytes && !muted) {
+                            val g = gain
+                            if (g != 1f) applyGain(buf, frameBytes, g)
+                            try { sink(buf, frameBytes) } catch (_: Exception) {}
+                        }
                     }
                 }
             }
-            playThread = thread(name = "voz-play", isDaemon = true) {
-                Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
-                while (running) {
-                    val f = try { queue.poll(40, TimeUnit.MILLISECONDS) } catch (_: InterruptedException) { null }
-                    if (f != null) try { trk.write(f, 0, f.size) } catch (_: Exception) {}
+            if (trk != null) {
+                playThread = thread(name = "voz-play", isDaemon = true) {
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
+                    while (running) {
+                        val f = try { queue.poll(40, TimeUnit.MILLISECONDS) } catch (_: InterruptedException) { null }
+                        if (f != null) try { trk.write(f, 0, f.size) } catch (_: Exception) {}
+                    }
                 }
             }
             return null
@@ -156,9 +178,39 @@ class AudioEngine(
         while (queue.size > MAX_BACKLOG) queue.poll()
     }
 
+    /** Muda a saída do som. O microfone do auricular Bluetooth entra junto com a saída. */
     @Suppress("DEPRECATION")
-    fun setSpeaker(on: Boolean) {
-        try { am.isSpeakerphoneOn = on } catch (_: Exception) {}
+    fun setRoute(route: AudioRoute) {
+        try {
+            when (route) {
+                AudioRoute.SPEAKER -> { releaseBluetooth(); am.isSpeakerphoneOn = true }
+                AudioRoute.BLUETOOTH -> { am.isSpeakerphoneOn = false; useBluetooth() }
+                else -> { releaseBluetooth(); am.isSpeakerphoneOn = false }
+            }
+        } catch (_: Exception) {}
+    }
+
+    @Suppress("DEPRECATION")
+    private fun useBluetooth() {
+        if (Build.VERSION.SDK_INT >= 31) {
+            val dev = am.availableCommunicationDevices.firstOrNull {
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+            }
+            if (dev != null) am.setCommunicationDevice(dev)
+        } else {
+            am.startBluetoothSco()
+            am.isBluetoothScoOn = true
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun releaseBluetooth() {
+        if (Build.VERSION.SDK_INT >= 31) {
+            am.clearCommunicationDevice()
+        } else if (am.isBluetoothScoOn) {
+            am.isBluetoothScoOn = false
+            am.stopBluetoothSco()
+        }
     }
 
     fun stop() {
@@ -173,7 +225,7 @@ class AudioEngine(
         try { track?.pause(); track?.flush() } catch (_: Exception) {}
         try { track?.release() } catch (_: Exception) {}
         track = null
-        try { setSpeaker(false); am.mode = oldMode } catch (_: Exception) {}
+        try { setRoute(AudioRoute.EARPIECE); am.mode = oldMode } catch (_: Exception) {}
         queue.clear()
     }
 }

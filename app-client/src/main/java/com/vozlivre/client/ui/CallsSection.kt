@@ -26,17 +26,6 @@ class ClientCallsSection(private val k: Kit, private val engine: ClientEngine, p
         list.orientation = LinearLayout.VERTICAL
         root.addView(segHolder)
         root.addView(list, k.lp(top = 12))
-        root.addView(k.button("Nova chamada") { newCall() }, k.lp(top = 8))
-    }
-
-    private fun newCall() {
-        val s = engine.selectedServerPeer()
-        if (s == null) {
-            host.toast("Escolhe primeiro um servidor")
-            host.goTo(0)
-        } else {
-            host.withPerms(host.micPerms()) { engine.startCall(s) }
-        }
     }
 
     private fun callBack(id: String) {
@@ -75,9 +64,18 @@ class ClientCallsSection(private val k: Kit, private val engine: ClientEngine, p
 
     override fun refresh() {
         segHolder.removeAllViews()
-        segHolder.addView(k.segmented(listOf("Recentes", "Favoritos"), tab) { tab = it; refresh() })
+        segHolder.addView(k.segmented(listOf("Contactos", "Recentes", "Favoritos"), tab) { tab = it; refresh() })
         list.removeAllViews()
         if (tab == 0) {
+            if (engine.serverId == null) {
+                list.addView(k.muted("Ainda não escolheste um servidor. Lê o QR ou escolhe um no separador Ligação."))
+                list.addView(k.button("Escolher servidor", Kit.Style.SECONDARY) { host.goTo(0) }, k.lp(top = 10))
+                return
+            }
+            val contacts = engine.contacts()
+            if (contacts.isEmpty()) list.addView(k.muted("Nenhum dispositivo deste servidor está visível agora."))
+            for (c in contacts) list.addView(row(c.id, c.name, if (c.isServer) "Servidor" else "Dispositivo do servidor"), k.lp(bottom = 8))
+        } else if (tab == 1) {
             val items = engine.history.take(20)
             if (items.isEmpty()) list.addView(k.muted("Ainda não há chamadas nesta sessão."))
             for (h in items) list.addView(row(h.peerId, h.peerName, formatWhen(h.at)), k.lp(bottom = 8))

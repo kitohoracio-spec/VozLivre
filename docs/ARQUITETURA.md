@@ -47,7 +47,7 @@ Pacote `ui`: componentes visuais (`Kit`, `Colors`, `Section`, `Screen`), secçõ
 Portas UDP: 39871 para controlo e descoberta, 39872 para áudio.
 
 Controlo (UDP, texto):
-- `HELLO|id|nome|papel`: anúncio de presença, em claro. É enviado por broadcast, por varredura e para pares já conhecidos.
+- `HELLO|id|nome|papel|grupo`: anúncio de presença, em claro. O grupo é o id do servidor que o cliente escolheu (vazio no servidor). É enviado por broadcast, por varredura e para pares já conhecidos.
 - `MSG|id|carga`: a carga é o comando de chamada cifrado e codificado em Base64.
 
 Áudio (UDP): `[seq:2][nonce:12][áudio cifrado][etiqueta:16]`. O áudio é µ-law, frames de 20 ms.
@@ -63,7 +63,7 @@ O servidor gera `grfee://join?v=1&id=..&n=..&ip=a,b&pw=..` (`Pairing`, no pacote
 Comandos de controlo, cifrados, separados por `|`:
 
 ```
-CALL|callId|nome   quem liga repete de 1 em 1 s (2 s depois de tocar) até haver resposta
+CALL|callId|nome[|L]  quem liga repete de 1 em 1 s (2 s depois de tocar) até haver resposta. L marca um pedido de escuta
 RINGING|callId     o outro lado está a tocar
 ACCEPT|callId      atendeu. Repetido sempre que chega um CALL duplicado
 REJECT|callId      recusou
@@ -75,9 +75,21 @@ PING|callId        batimento de 2 em 2 s durante a chamada
 
 Tempos: 40 s sem resposta termina a chamada de quem liga. Quem recebe perde a chamada se não chegar CALL durante 6 s. Uma chamada ativa cai depois de 9 s sem áudio nem PING.
 
+## Grupo e contactos do cliente
+
+Cada cliente anuncia no HELLO o id do servidor escolhido (`ClientEngine.groupId`). `ClientEngine.members()` devolve os clientes com o mesmo grupo e `contacts()` junta-lhes o servidor. `screenIncoming` ignora chamadas de clientes de outro grupo.
+
+## Escuta
+
+`ServerEngine.startListening` envia um CALL com a marca `L`. No cliente, a sessão fica em INCOMING com `listenMode` e o telemóvel toca, por isso começa só quando o utilizador toca em Permitir (`answer`). O `AudioEngine` abre só o que a sessão precisa: o cliente capta e não toca, o servidor toca e não capta. `ClientEngine.screenIncoming` só aceita escuta do servidor escolhido e `ServerEngine` ignora pedidos de escuta. Com uma chamada em curso, um pedido de escuta recebe BUSY e não entra na segunda chamada.
+
 ## Segunda chamada
 
 Com `askOnSecondCall` ligado, um CALL de outro par durante uma chamada fica em `waiting` e o chamador recebe RINGING. `answerWaiting` termina a chamada atual e aceita a nova, `rejectWaiting` responde REJECT. Sem decisão, a espera acaba ao fim de 6 s sem novo CALL. Se a chamada atual acabar antes, `promoteWaiting` faz a segunda tocar. Com a opção desligada, o CALL recebe BUSY.
+
+## Saída de áudio
+
+`AudioRoute` (automático, auricular, altifalante, Bluetooth) e `AudioRoutes` decidem a saída. No Android 12 ou superior usa `setCommunicationDevice` com os dispositivos de comunicação disponíveis. Em versões anteriores usa `startBluetoothSco`. `CallEngine.defaultRoute` guarda a preferência e `cycleRoute` alterna durante a chamada.
 
 ## Filtro de dispositivos
 
@@ -86,14 +98,16 @@ Com `askOnSecondCall` ligado, um CALL de outro par durante uma chamada fica em `
 ## Regras por papel
 
 Servidor, por esta ordem:
+0. Pedido de escuta: `IGNORE`.
 1. Cliente bloqueado: `IGNORE`.
 2. Chamada de outro servidor: `IGNORE`.
 3. Aprovação manual ligada e cliente não aprovado: `DENY`.
 4. Caso contrário: `ALLOW`.
 
 Cliente:
-1. Chamada de outro cliente: `IGNORE`.
-2. Caso contrário: `ALLOW`.
+1. Pedido de escuta que não vem do servidor escolhido: `IGNORE`.
+2. Chamada de um cliente de outro servidor (ou sem servidor escolhido): `IGNORE`.
+3. Caso contrário: `ALLOW`.
 
 Um par sem papel conhecido (dispositivo Bluetooth, ou um par que ainda não enviou HELLO) é tratado como permitido.
 

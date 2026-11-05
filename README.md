@@ -23,7 +23,7 @@ O servidor decide quem pode ligar (bloqueios e aprovação manual). O cliente es
 Barra superior com o ícone e o nome Grfee. Barra inferior flutuante, em cartão arredondado, com cinco separadores. A barra desaparece quando rolas para baixo e volta quando rolas para cima.
 
 - Ligações: logótipo, cartão de sessão ativa (online e tempo), mosaicos com clientes ligados, chamadas ativas, pedidos pendentes e tipo de rede, e o código QR para ligar clientes.
-- Clientes: Ligados, Pendentes e Histórico. Em Ligados, o botão Ligar chama o cliente. Em Pendentes, Aceitar ou Recusar.
+- Clientes: Ligados, Pendentes e Histórico. Em Ligados, o botão Ligar chama o cliente e o botão Escutar pede-lhe o microfone (ver Escuta). Em Pendentes, Aceitar ou Recusar.
 - Chamadas: Ativas, Recentes e Registos. A chamada ativa tem silenciar, altifalante e terminar. Fora deste separador, uma barra verde leva de volta à chamada.
 - Diagnóstico: estado geral, verificações de rede, descoberta, permissões, sinalização e áudio, tabela de pares e registo com Copiar e Limpar.
 - Definições avançadas: gestão da rede (Wi-Fi, IP manual, Wi-Fi Direct com criação de grupo, Bluetooth, portas, reinício do motor), gestão de clientes (aprovação manual, bloqueios), gestão de chamadas (regras e estatísticas), áudio, segurança (nome, senha, permissões), segundo plano, registos e sobre.
@@ -32,12 +32,12 @@ Barra superior com o ícone e o nome Grfee. Barra inferior flutuante, em cartão
 
 Barra superior com o ícone e o nome Grfee. Barra inferior flutuante, em cartão arredondado, com quatro separadores. A barra desaparece quando rolas para baixo e volta quando rolas para cima.
 
-- Ligação: estado da ligação ao servidor, botão Ler QR do servidor, lista de servidores encontrados, ligação por IP, Wi-Fi Direct e Bluetooth (recolhidos), nome e senha.
-- Chamadas: Recentes e Favoritos, com o botão Nova chamada que liga ao servidor escolhido.
-- Áudio: volume do altifalante, ganho do microfone, saída de áudio e dados de qualidade.
+- Ligação: estado da ligação ao servidor, botão Ler QR do servidor, Procurar servidores, lista de servidores encontrados, nome e senha.
+- Chamadas: Contactos (o servidor escolhido e os outros clientes desse servidor), Recentes e Favoritos. Cada contacto tem um botão de chamada.
+- Áudio: volume e saída de áudio.
 - Estado: servidor, tipo de ligação, IP local, força do sinal, tempo de ligação, permissões, segundo plano e créditos.
 
-Em chamada, o cliente vê o ecrã de chamada com temporizador, microfone, altifalante e terminar.
+Em chamada, o cliente vê o ecrã de chamada com temporizador, microfone, altifalante e terminar. O cliente é básico de propósito: rede avançada (IP manual, Wi-Fi Direct, Bluetooth), bloqueios, escuta, diagnóstico, filtros de dispositivos e ganho do microfone existem só na app do Servidor.
 
 ## Ligar por QR
 
@@ -45,20 +45,32 @@ No Servidor, no separador Ligações, toca em Mostrar código QR. No Cliente, to
 
 O QR contém a senha do servidor. Mostra-o só a quem deve ter acesso e não o fotografes. Se mudares a senha ou a rede do servidor, o código muda sozinho.
 
+## Auricular Bluetooth
+
+O som da chamada pode sair por um auricular ou kit Bluetooth que já esteja ligado ao telemóvel, e o microfone do auricular entra junto. Por defeito a saída é automática: usa o auricular Bluetooth se houver um ligado e, se não houver, o auricular do telemóvel. Durante a chamada, o botão da saída alterna entre auricular, altifalante e Bluetooth. A saída por defeito escolhe-se no separador Áudio (Cliente) ou em Definições (Servidor). A app pede a permissão de dispositivos próximos ao abrir, porque o Android a exige para usar o Bluetooth na chamada.
+
+Um auricular serve só como saída e entrada de som. Não aparece na lista de dispositivos nem recebe chamadas, porque não corre a app.
+
 ## Segunda chamada
 
-Se alguém liga durante uma chamada, aparece um aviso no topo do ecrã com Recusar e Atender. Atender termina a chamada atual e passa para a nova. Recusar mantém a atual e a pessoa ouve a recusa. Se a chamada atual terminar antes de decidires, a segunda passa a tocar. A opção Perguntar-me numa segunda chamada pode ser desligada: nesse caso a pessoa recebe ocupado. No Servidor está em Definições, Gestão de chamadas. No Cliente está no separador Chamadas. A app não mantém duas chamadas com áudio ao mesmo tempo.
+Se alguém liga durante uma chamada, aparece um aviso no topo do ecrã com Recusar e Atender. Atender termina a chamada atual e passa para a nova. Recusar mantém a atual e a pessoa ouve a recusa. Se a chamada atual terminar antes de decidires, a segunda passa a tocar. No Servidor, a opção Perguntar-me numa segunda chamada pode ser desligada em Definições, Gestão de chamadas: nesse caso a pessoa recebe ocupado. No Cliente está sempre ligada. A app não mantém duas chamadas com áudio ao mesmo tempo.
 
 ## Dispositivos visíveis
 
-A lista mostra só aparelhos com o Grfee. Na rede local só aparecem os que enviam o anúncio da app. No Bluetooth só aparecem os que anunciam o serviço da app, por isso auriculares, colunas e outros emparelhados ficam de fora. Em Wi-Fi Direct ficam só os telemóveis, e TV e impressoras são escondidas. Um telemóvel com o Grfee fechado ou com Bluetooth desligado não aparece. Em Gestão da rede (Servidor) ou em Wi-Fi Direct e Bluetooth (Cliente), a opção Mostrar também aparelhos sem a app mostra tudo, para diagnóstico.
+A lista mostra só aparelhos com o Grfee. Na rede local só aparecem os que enviam o anúncio da app. No Bluetooth só aparecem os que anunciam o serviço da app, por isso auriculares, colunas e outros emparelhados ficam de fora. Em Wi-Fi Direct ficam só os telemóveis, e TV e impressoras são escondidas. Um telemóvel com o Grfee fechado ou com Bluetooth desligado não aparece. Em Gestão da rede (Servidor), a opção Mostrar também aparelhos sem a app mostra tudo, para diagnóstico.
 
 ## Quem pode ligar a quem
 
 - Cliente para servidor e servidor para cliente: a chamada toca.
-- O servidor ignora chamadas de clientes bloqueados.
-- Com a aprovação manual ligada, o servidor recusa chamadas de clientes ainda não aceites e o cliente vê a mensagem "Chamada não autorizada".
-- Cliente para cliente e servidor para servidor: o recetor ignora a chamada.
+- Cliente para cliente: toca se os dois escolheram o mesmo servidor. Cada cliente anuncia na rede o servidor que escolheu, e é assim que os contactos aparecem. Clientes de servidores diferentes ignoram-se.
+- O servidor ignora chamadas de clientes bloqueados. Com a aprovação manual ligada, recusa clientes ainda não aceites e o cliente vê "Chamada não autorizada". Estas regras valem para chamadas ao servidor. Entre clientes a chamada é direta e o servidor não a controla.
+- Servidor para servidor: o recetor ignora a chamada.
+
+## Escuta
+
+Só o Servidor pede escuta. No separador Clientes, o botão Escutar envia um pedido ao cliente. O telemóvel do cliente toca, mostra que o servidor quer escutar o microfone e só começa se o utilizador tocar em Permitir. Não há atendimento automático nem permissão permanente. Durante a escuta, o cliente vê o ecrã "O servidor está a escutar o teu microfone" com o botão para parar, tem a notificação da app ativa e o indicador de microfone do Android visível. O cliente só aceita pedidos de escuta do servidor que escolheu. O servidor não abre o microfone dele e ouve pelo altifalante, ou pelo auricular Bluetooth se houver um ligado.
+
+Usa a escuta apenas com o consentimento de quem está no local. Escutar um ambiente sem o conhecimento das pessoas é ilegal em muitos países.
 
 ## Compilar
 
@@ -83,8 +95,8 @@ GitHub Actions: o fluxo `Build Grfee APKs` corre os testes e compila os dois APK
 
 1. Instala a app Servidor num telemóvel e a app Cliente noutro.
 2. Define a mesma senha nos dois (Servidor: Definições, Segurança. Cliente: separador Ligação), ou salta este passo e usa o QR do passo 4.
-3. Liga os dois à mesma rede, ou usa o hotspot de um deles. Com Wi-Fi Direct, no Servidor abre Gestão da rede e toca em Criar grupo. No Cliente abre Wi-Fi Direct e Bluetooth, toca em Procurar e depois em Ligar.
-4. No Servidor toca em Mostrar código QR e no Cliente em Ler QR do servidor. Sem QR, toca em Procurar servidores e escolhe o servidor. Depois usa Nova chamada. No Servidor, liga a um cliente no separador Clientes.
+3. Liga os dois à mesma rede, ou usa o hotspot de um deles. Com Wi-Fi Direct, no Servidor abre Gestão da rede e toca em Criar grupo. Depois, ainda no Servidor, toca no telemóvel cliente na lista de Wi-Fi Direct e aceita o convite no cliente.
+4. No Servidor toca em Mostrar código QR e no Cliente em Ler QR do servidor. Sem QR, toca em Procurar servidores e escolhe o servidor. Depois, no Cliente, abre Chamadas e toca no botão de chamada de um contacto. No Servidor, liga a um cliente no separador Clientes. Com um segundo Cliente a usar o mesmo servidor, os dois aparecem nos Contactos um do outro.
 
 As duas apps usam as mesmas portas UDP (39871 e 39872). Para testar, instala cada uma num telemóvel diferente.
 
@@ -113,7 +125,8 @@ O microfone usa cancelamento de eco, supressão de ruído e controlo automático
 
 ## Limitações
 
-- Uma só chamada de cada vez. O servidor não faz ponte de áudio entre clientes.
+- Uma só chamada de cada vez. O servidor não faz ponte de áudio entre clientes: as chamadas entre clientes são diretas.
+- Um microfone Bluetooth sozinho, sem telemóvel, não serve como fonte de escuta. O Android liga a entrada e a saída do auricular em conjunto, e o aparelho não corre a app. A escuta usa o microfone de um telemóvel com o Cliente.
 - Esta versão não fala com as versões 0.5 e anteriores, que eram uma única app. O nome mudou para Grfee, mas o identificador das apps (com.vozlivre.server e com.vozlivre.client) ficou igual, por isso a instalação atualiza a anterior.
 - A força do sinal só existe em ligações Wi-Fi a um router ou hotspot. Em Wi-Fi Direct e Bluetooth aparece Indisponível.
 - O histórico e as estatísticas existem só durante a sessão. Favoritos, bloqueios e aprovações ficam guardados.

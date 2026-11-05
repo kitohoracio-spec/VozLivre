@@ -13,7 +13,9 @@ data class Peer(
     val via: String = "",
     val detail: String = "",
     val role: String = "",
-    val blocked: Boolean = false
+    val blocked: Boolean = false,
+    /** Id do servidor a que este cliente se juntou (vazio se não anunciou nenhum). */
+    val group: String = ""
 ) {
     val isP2p: Boolean get() = via.startsWith("p2p")
 

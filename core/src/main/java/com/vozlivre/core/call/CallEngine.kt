@@ -16,6 +16,8 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import com.vozlivre.core.audio.AudioEngine
+import com.vozlivre.core.audio.AudioRoute
+import com.vozlivre.core.audio.AudioRoutes
 import com.vozlivre.core.audio.Codec
 import com.vozlivre.core.net.BluetoothTransport
 import com.vozlivre.core.net.LanTransport
@@ -80,7 +82,7 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
     var displayName: String = prefs.getString("name", "Utilizador") ?: "Utilizador"
         private set
 
-    val lan = LanTransport(app, myId, { displayName }, { role.code })
+    val lan = LanTransport(app, myId, { displayName }, { role.code }, { groupId() })
     val bt = BluetoothTransport(app)
     val p2p = WifiDirect(app, lan, { log(it) }, { ui?.onPeersChanged() })
 
@@ -88,7 +90,10 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
     @Volatile var peer: Peer? = null; private set
     var statusText = "Nenhuma chamada ativa"; private set
     var muted = false; private set
-    var speaker = false; private set
+
+    /** A sessão atual é uma escuta: o cliente envia o microfone e o servidor só ouve. */
+    @Volatile var listenMode = false; private set
+    var route: AudioRoute = AudioRoute.EARPIECE; private set
     var activeSince = 0L; private set
 
     private var callId = ""
@@ -113,8 +118,15 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
     var listenInBackground: Boolean = prefs.getBoolean("listen", false)
         private set
 
-    var defaultSpeaker: Boolean = prefs.getBoolean("default_speaker", false)
+    /** Saída preferida ao começar uma chamada. AUTO usa o auricular Bluetooth se houver um ligado. */
+    var defaultRoute: AudioRoute = loadDefaultRoute()
         private set
+
+    private fun loadDefaultRoute(): AudioRoute {
+        val saved = prefs.getString("default_route", null)
+        if (saved != null) return try { AudioRoute.valueOf(saved) } catch (_: Exception) { AudioRoute.AUTO }
+        return if (prefs.getBoolean("default_speaker", false)) AudioRoute.SPEAKER else AudioRoute.AUTO
+    }
 
     var micPercent: Int = prefs.getInt("mic_pct", 60)
         private set
@@ -150,7 +162,10 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
      * descoberto na rede, ou null se ainda não o conhecemos. A implementação
      * regista no log o motivo de qualquer recusa.
      */
-    protected abstract fun screenIncoming(peerId: String, peer: Peer?): Screening
+    protected abstract fun screenIncoming(peerId: String, peer: Peer?, listen: Boolean): Screening
+
+    /** Servidor a que este par se juntou, anunciado aos outros no HELLO. Só o Cliente usa. */
+    protected open fun groupId(): String = ""
 
     // ---------------------------------------------------------------- ciclo de vida
 
@@ -198,9 +213,10 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
         lan.wake()
     }
 
-    fun setDefaultSpeaker(on: Boolean) {
-        defaultSpeaker = on
-        prefs.edit().putBoolean("default_speaker", on).apply()
+    fun setDefaultRoute(r: AudioRoute) {
+        defaultRoute = r
+        prefs.edit().putString("default_route", r.name).apply()
+        if (state == State.ACTIVE) setRoute(AudioRoutes.resolve(r, app))
     }
 
     fun setAskOnSecondCall(on: Boolean) {
@@ -271,13 +287,18 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
 
     // ---------------------------------------------------------------- ações do utilizador
 
-    fun startCall(p: Peer) {
+    fun startCall(p: Peer) { beginOutgoing(p, false) }
+
+    /** Pede ao par para partilhar o microfone. Só o servidor expõe isto. O par tem de permitir. */
+    protected fun beginListen(p: Peer) { beginOutgoing(p, true) }
+
+    private fun beginOutgoing(p: Peer, listen: Boolean) {
         if (state != State.IDLE) { ui?.onToast("Já estás numa chamada"); return }
         val id = newCallId()
-        state = State.OUTGOING; peer = p; callId = id; ringing = false; incomingCall = false
-        statusText = "A ligar a ${p.name}..."
+        state = State.OUTGOING; peer = p; callId = id; ringing = false; incomingCall = false; listenMode = listen
+        statusText = if (listen) "A pedir para escutar ${p.name}..." else "A ligar a ${p.name}..."
         outgoingStart = SystemClock.elapsedRealtime()
-        log("Chamada $id para ${p.name} (${p.id}) via ${p.via.ifBlank { "bluetooth" }}")
+        log((if (listen) "Pedido de escuta $id a " else "Chamada $id para ") + "${p.name} (${p.id}) via ${p.via.ifBlank { "bluetooth" }}")
         ui?.onStateChanged()
         transportFor(p.id).connect(p.id) { ok, err ->
             main.post {
@@ -313,11 +334,15 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
         ui?.onStateChanged()
     }
 
-    fun toggleSpeaker() {
-        speaker = !speaker
-        audio?.setSpeaker(speaker)
+    /** Muda a saída do som da chamada atual. */
+    fun setRoute(r: AudioRoute) {
+        route = r
+        audio?.setRoute(r)
         ui?.onStateChanged()
     }
+
+    /** Auricular, altifalante e, havendo um ligado, auricular Bluetooth. */
+    fun cycleRoute() { setRoute(AudioRoutes.next(route, app)) }
 
     // ---------------------------------------------------------------- TransportListener (threads de rede)
 
@@ -364,19 +389,20 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
         when (cmd) {
             "CALL" -> {
                 val name = parts.getOrNull(2)?.replace('_', ' ') ?: "Desconhecido"
+                val listen = parts.getOrNull(3) == "L"
                 val known = allPeers().firstOrNull { it.id == peerId }
                 val p = known
                     ?: Peer(peerId, name, if (peerId.startsWith("bt:")) PeerKind.BLUETOOTH else PeerKind.LAN)
-                when (screenIncoming(peerId, known)) {
+                when (screenIncoming(peerId, known, listen)) {
                     Screening.IGNORE -> return
                     Screening.DENY -> { send(p, "DENY|$cid"); return }
                     Screening.ALLOW -> {}
                 }
                 if (state == State.IDLE) {
-                    state = State.INCOMING; peer = p; callId = cid; incomingCall = true
-                    statusText = "Chamada de ${p.name}"
+                    state = State.INCOMING; peer = p; callId = cid; incomingCall = true; listenMode = listen
+                    statusText = if (listen) "${p.name} pede para escutar o microfone" else "Chamada de ${p.name}"
                     lastCallSeen = SystemClock.elapsedRealtime()
-                    log("Chamada recebida de ${p.name}")
+                    log(if (listen) "Pedido de escuta recebido de ${p.name}" else "Chamada recebida de ${p.name}")
                     send(p, "RINGING|$cid")
                     startRinging()
                     if (ui == null) showIncomingNotification(p)
@@ -387,6 +413,8 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
                     lastCallSeen = SystemClock.elapsedRealtime()
                     if (state == State.INCOMING) send(p, "RINGING|$cid")
                     else if (state == State.ACTIVE) send(p, "ACCEPT|$cid")
+                } else if (listen) {
+                    send(p, "BUSY|$cid")
                 } else if (waiting?.id == peerId && cid == waitingId) {
                     waitingSeen = SystemClock.elapsedRealtime()
                     send(p, "RINGING|$cid")
@@ -422,7 +450,7 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
             if (state != State.OUTGOING) return
             val p = peer ?: return
             if (SystemClock.elapsedRealtime() - outgoingStart > 40_000) { finish("Sem resposta", true); return }
-            send(p, "CALL|$callId|${safe(displayName)}")
+            send(p, "CALL|$callId|${safe(displayName)}" + if (listenMode) "|L" else "")
             main.postDelayed(this, if (ringing) 2000 else 1000)
         }
     }
@@ -454,14 +482,25 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
         state = State.ACTIVE
         activeSince = SystemClock.elapsedRealtime()
         lastRemote = activeSince
-        statusText = "Em chamada com ${p.name}"
-        speaker = defaultSpeaker
-        log("Chamada ativa com ${p.name}")
-        try { CallService.start(app, "Em chamada com ${p.name}") } catch (e: Exception) { log("Serviço de chamada não arrancou: ${e.message}") }
+        // Na escuta, o servidor só ouve (sem microfone) e o cliente só envia (sem altifalante).
+        val captures = !(listenMode && role == Role.SERVER)
+        val plays = !(listenMode && role == Role.CLIENT)
+        val notice = when {
+            !listenMode -> "Em chamada com ${p.name}"
+            captures -> "A partilhar o microfone com ${p.name}"
+            else -> "A escutar ${p.name}"
+        }
+        statusText = notice
+        route = when {
+            listenMode && role == Role.SERVER -> if (AudioRoutes.bluetoothAvailable(app)) AudioRoute.BLUETOOTH else AudioRoute.SPEAKER
+            else -> AudioRoutes.resolve(defaultRoute, app)
+        }
+        log(if (listenMode) "Escuta ativa: $notice" else "Chamada ativa com ${p.name}")
+        try { CallService.start(app, notice) } catch (e: Exception) { log("Serviço de chamada não arrancou: ${e.message}") }
         acquireLocks()
         val t = transportFor(p.id)
         seq = 0
-        val a = AudioEngine(app, t.audioRate) { buf, n ->
+        val a = AudioEngine(app, t.audioRate, captures, plays) { buf, n ->
             seq = (seq + 1) and 0xFFFF
             val packed = Codec.encode(buf, n)
             val sealed = Secure.encrypt(packed, packed.size)
@@ -471,7 +510,7 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
         a.gain = micGain(micPercent)
         val err = a.start()
         if (err != null) { log(err); ui?.onToast(err); finish(err, true); return }
-        a.setSpeaker(speaker)
+        a.setRoute(route)
         audio = a
         main.removeCallbacks(keepAlive)
         main.postDelayed(keepAlive, 2000)
@@ -500,7 +539,7 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
         }
         log("Chamada terminada: $message")
         state = State.IDLE; peer = null; callId = ""; ringing = false
-        muted = false; speaker = false
+        muted = false; route = AudioRoute.EARPIECE; listenMode = false
         statusText = message
         ui?.onToast(message)
         ui?.onStateChanged()
@@ -603,8 +642,8 @@ abstract class CallEngine(protected val app: Context, val role: Role) : Transpor
             )
             val n = Notification.Builder(app, "vozlivre_incoming")
                 .setSmallIcon(android.R.drawable.sym_call_incoming)
-                .setContentTitle("Chamada de ${p.name}")
-                .setContentText("Toca para atender")
+                .setContentTitle(if (listenMode) "${p.name} pede para escutar o microfone" else "Chamada de ${p.name}")
+                .setContentText(if (listenMode) "Toca para decidir" else "Toca para atender")
                 .setCategory(Notification.CATEGORY_CALL)
                 .setFullScreenIntent(pi, true)
                 .setContentIntent(pi)

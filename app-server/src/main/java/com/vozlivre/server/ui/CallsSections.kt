@@ -7,6 +7,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import com.vozlivre.core.R
+import com.vozlivre.core.audio.AudioRoute
 import com.vozlivre.core.call.CallEngine
 import com.vozlivre.core.ui.Colors
 import com.vozlivre.core.ui.Host
@@ -64,14 +65,14 @@ class CallsTabSection(private val k: Kit, private val engine: ServerEngine, priv
                     col.orientation = LinearLayout.VERTICAL
                     col.addView(k.text(p.name, 16f, Colors.TEXT, true))
                     val secs = ((android.os.SystemClock.elapsedRealtime() - engine.activeSince) / 1000).toInt()
-                    col.addView(k.text("Em chamada • " + formatSeconds(secs), 13f, Colors.GREEN))
+                    col.addView(k.text((if (engine.listenMode) "A escutar • " else "Em chamada • ") + formatSeconds(secs), 13f, Colors.GREEN))
                     row.addView(col, k.lp(0, -2, left = 12, weight = 1f))
                     card.addView(row)
                     val tools = LinearLayout(k.ctx)
                     tools.orientation = LinearLayout.HORIZONTAL
                     tools.gravity = Gravity.END
                     tools.addView(roundSmall(k, R.drawable.ic_mic, if (engine.muted) Colors.RED else Colors.CARD_HI, if (engine.muted) Color.WHITE else Colors.TEXT) { engine.toggleMute() })
-                    tools.addView(roundSmall(k, R.drawable.ic_speaker, if (engine.speaker) Colors.GREEN else Colors.CARD_HI, if (engine.speaker) Color.BLACK else Colors.TEXT) { engine.toggleSpeaker() }, k.lp(-2, -2, left = 10))
+                    tools.addView(roundSmall(k, R.drawable.ic_speaker, if (engine.route != AudioRoute.EARPIECE) Colors.GREEN else Colors.CARD_HI, if (engine.route != AudioRoute.EARPIECE) Color.BLACK else Colors.TEXT) { engine.cycleRoute() }, k.lp(-2, -2, left = 10))
                     tools.addView(roundSmall(k, R.drawable.ic_call, Colors.RED, Color.WHITE, 135f) { engine.hangup() }, k.lp(-2, -2, left = 10))
                     card.addView(tools, k.lp(top = 12))
                     list.addView(card, k.lp(bottom = 12))

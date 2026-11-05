@@ -9,6 +9,8 @@ import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import com.vozlivre.core.R
+import com.vozlivre.core.audio.AudioRoute
+import com.vozlivre.core.audio.AudioRoutes
 import com.vozlivre.core.call.CallEngine
 
 /** Nome e senha das chamadas. */
@@ -117,11 +119,12 @@ class CreditsSection(private val k: Kit) : Section() {
 }
 
 /** Volume, microfone, saída de áudio e dados de qualidade. */
-class AudioSettingsSection(private val k: Kit, private val engine: CallEngine, private val host: Host) : Section() {
+class AudioSettingsSection(private val k: Kit, private val engine: CallEngine, private val host: Host, private val advanced: Boolean = true) : Section() {
     private val root = LinearLayout(k.ctx)
     private val volValue = k.text("", 14f, Colors.TEXT, true)
     private val micValue = k.text("", 14f, Colors.TEXT, true)
     private val outValue = k.text("", 14f, Colors.TEXT)
+    private val btStatus = k.muted("", 12f)
     private val volSeek = SeekBar(k.ctx)
     private val micSeek = SeekBar(k.ctx)
     override val view: View get() = root
@@ -171,8 +174,10 @@ class AudioSettingsSection(private val k: Kit, private val engine: CallEngine, p
             override fun onStopTrackingTouch(s: SeekBar?) {}
         })
         root.addView(control(R.drawable.ic_speaker, "Volume do altifalante", volValue, volSeek), k.lp(bottom = 12))
-        root.addView(control(R.drawable.ic_mic, "Microfone", micValue, micSeek), k.lp(bottom = 4))
-        root.addView(k.muted("No microfone, 50% é o ganho normal e 100% quadruplica o nível. Sobe se a outra pessoa te ouve baixo.", 12f), k.lp(bottom = 12))
+        if (advanced) {
+            root.addView(control(R.drawable.ic_mic, "Microfone", micValue, micSeek), k.lp(bottom = 4))
+            root.addView(k.muted("No microfone, 50% é o ganho normal e 100% quadruplica o nível. Sobe se a outra pessoa te ouve baixo.", 12f), k.lp(bottom = 12))
+        }
 
         val out = k.card()
         out.addView(k.text("Saída de áudio", 15f, Colors.TEXT, true))
@@ -187,6 +192,7 @@ class AudioSettingsSection(private val k: Kit, private val engine: CallEngine, p
         pick.addView(arrow)
         pick.setOnClickListener { chooseOutput() }
         out.addView(pick, k.lp(top = 10))
+        out.addView(btStatus, k.lp(top = 8))
         root.addView(out, k.lp(bottom = 12))
 
         val info = k.card()
@@ -194,17 +200,16 @@ class AudioSettingsSection(private val k: Kit, private val engine: CallEngine, p
         info.addView(k.kv("Codec", "G.711 µ-law"), k.lp(top = 10))
         info.addView(k.kv("Taxa Wi-Fi / Bluetooth", "16 kHz / 8 kHz"), k.lp(top = 6))
         info.addView(k.kv("Cifra", "AES-256-GCM"), k.lp(top = 6))
-        root.addView(info)
+        if (advanced) root.addView(info)
     }
 
     private fun chooseOutput() {
-        val items = arrayOf("Altifalante do telemóvel", "Auricular")
+        val routes = listOf(AudioRoute.AUTO, AudioRoute.EARPIECE, AudioRoute.SPEAKER)
+        val items = arrayOf("Automático (auricular Bluetooth, se ligado)", "Auricular do telemóvel", "Altifalante do telemóvel")
         AlertDialog.Builder(k.ctx, android.R.style.Theme_Material_Dialog_Alert)
             .setTitle("Saída de áudio")
-            .setSingleChoiceItems(items, if (engine.defaultSpeaker) 0 else 1) { d, which ->
-                val sp = which == 0
-                engine.setDefaultSpeaker(sp)
-                if (engine.state == CallEngine.State.ACTIVE && engine.speaker != sp) engine.toggleSpeaker()
+            .setSingleChoiceItems(items, routes.indexOf(engine.defaultRoute).coerceAtLeast(0)) { d, which ->
+                engine.setDefaultRoute(routes[which])
                 d.dismiss()
                 refresh()
             }
@@ -214,7 +219,9 @@ class AudioSettingsSection(private val k: Kit, private val engine: CallEngine, p
     override fun refresh() {
         if (!volSeek.isPressed) { volSeek.progress = host.getVolume(); volValue.text = "${volSeek.progress}%" }
         if (!micSeek.isPressed) { micSeek.progress = engine.micPercent; micValue.text = "${engine.micPercent}%" }
-        outValue.text = if (engine.defaultSpeaker) "Altifalante do telemóvel" else "Auricular"
+        outValue.text = engine.defaultRoute.label
+        btStatus.text = if (AudioRoutes.bluetoothAvailable(k.ctx)) "Auricular Bluetooth ligado: o som da chamada pode sair por ele."
+        else "Nenhum auricular Bluetooth ligado a este telemóvel."
     }
 }
 

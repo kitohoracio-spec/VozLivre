@@ -40,11 +40,15 @@ class ClientsTabSection(private val k: Kit, private val engine: ServerEngine, pr
         when (tab) {
             0 -> {
                 if (linked.isEmpty()) list.addView(k.muted("Nenhum cliente encontrado. Abre o Grfee Cliente nos outros telemóveis."))
+                else list.addView(k.muted("Escutar pede ao cliente para partilhar o microfone. O telemóvel dele toca e só começa se ele tocar em Permitir."), k.lp(bottom = 8))
                 for (p in linked) {
                     val call = k.button("Ligar", Kit.Style.PRIMARY, true) { host.withPerms(host.micPerms()) { engine.startCall(p) } }
-                    call.isEnabled = !busy
-                    call.alpha = if (busy) 0.4f else 1f
-                    list.addView(k.peerRow(p, k.pill("Ligado"), call), k.lp(bottom = 8))
+                    val listen = k.button("Escutar", Kit.Style.SECONDARY, true) { host.withPerms(host.micPerms()) { engine.startListening(p) } }
+                    for (b in listOf(call, listen)) {
+                        b.isEnabled = !busy
+                        b.alpha = if (busy) 0.4f else 1f
+                    }
+                    list.addView(k.peerRow(p, listen, call), k.lp(bottom = 8))
                 }
                 list.addView(k.navRow(R.drawable.ic_people, "Gerir clientes", "Aprovação, bloqueios e autorizações") {
                     host.openSub("Gestão de clientes", R.drawable.ic_people, clientAdminPage(k, engine, host))

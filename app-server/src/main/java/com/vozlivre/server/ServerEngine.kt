@@ -32,6 +32,14 @@ class ServerEngine(app: Context) : CallEngine(app, Role.SERVER) {
     /** Pares que não são servidores (clientes e dispositivos Bluetooth). */
     fun clients(): List<Peer> = allPeers().filter { !it.isServer }
 
+    // ---------------------------------------------------------------- escuta
+
+    /**
+     * Pede a um cliente para partilhar o microfone com este servidor. O cliente vê o pedido,
+     * o telemóvel toca e só começa se o utilizador tocar em Permitir. Não há escuta automática.
+     */
+    fun startListening(p: Peer) { beginListen(p) }
+
     // ---------------------------------------------------------------- ligação por QR
 
     /** Texto do QR que o cliente lê para ficar configurado: id, IPs e senha deste servidor. */
@@ -81,7 +89,11 @@ class ServerEngine(app: Context) : CallEngine(app, Role.SERVER) {
 
     // ---------------------------------------------------------------- regras de chamada
 
-    override fun screenIncoming(peerId: String, peer: Peer?): Screening = when {
+    override fun screenIncoming(peerId: String, peer: Peer?, listen: Boolean): Screening = when {
+        listen -> {
+            log("Pedido de escuta de $peerId ignorado: só o servidor pede escuta")
+            Screening.IGNORE
+        }
         blocked.contains(peerId) -> {
             log("Chamada de $peerId ignorada (bloqueado)")
             Screening.IGNORE

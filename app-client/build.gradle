@@ -20,8 +20,8 @@ android {
         applicationId 'com.vozlivre.client'
         minSdk 26
         targetSdk 34
-        versionCode 11
-        versionName '0.10.0'
+        versionCode 13
+        versionName '0.10.2'
     }
 }
 

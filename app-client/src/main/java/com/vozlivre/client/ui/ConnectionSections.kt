@@ -1,7 +1,11 @@
 package com.vozlivre.client.ui
 
 import android.view.Gravity
+import android.app.AlertDialog
+import android.content.ClipboardManager
+import android.content.Context
 import android.view.View
+import android.widget.EditText
 import android.widget.LinearLayout
 import com.vozlivre.client.ClientEngine
 import com.vozlivre.core.R
@@ -31,16 +35,35 @@ class ClientConnectionSection(private val k: Kit, private val engine: ClientEngi
         host.toast("A procurar servidores...")
     }
 
-    private fun scanQr() {
-        host.scanQr { text ->
-            val info = Pairing.decode(text)
-            if (info == null) {
-                host.toast("Este QR não é de um servidor Grfee")
-            } else {
-                engine.joinServer(info)
-                host.toast("A ligar a ${info.name}...")
-            }
+    private fun join(text: String) {
+        val info = Pairing.decode(text)
+        if (info == null) {
+            host.toast("Este código não é de um servidor Grfee")
+        } else {
+            engine.joinServer(info)
+            host.toast("A ligar a ${info.name}...")
         }
+    }
+
+    private fun scanQr() { host.scanQr { text -> join(text) } }
+
+    /** Alternativa à câmara: cola o código copiado ou partilhado pelo servidor. */
+    private fun pasteCode() {
+        val cm = k.ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = cm.primaryClip
+        val pasted = if (clip != null && clip.itemCount > 0) clip.getItemAt(0).coerceToText(k.ctx).toString() else ""
+        val input = EditText(k.ctx)
+        input.setText(if (Pairing.decode(pasted) != null) pasted else "")
+        input.hint = "grfee://join?..."
+        input.setTextColor(Colors.TEXT)
+        input.setHintTextColor(Colors.MUTED)
+        input.setPadding(k.dp(20), k.dp(12), k.dp(20), k.dp(12))
+        AlertDialog.Builder(k.ctx, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle("Colar código do servidor")
+            .setView(input)
+            .setPositiveButton("Ligar") { _, _ -> join(input.text.toString()) }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     override fun refresh() {
@@ -68,11 +91,13 @@ class ClientConnectionSection(private val k: Kit, private val engine: ClientEngi
             content.addView(k.text("Servidor fora de alcance", 18f, Colors.AMBER, true))
             content.addView(k.muted("O servidor escolhido não está visível. Procura de novo."), k.lp(top = 6))
             content.addView(k.button("Ler QR do servidor") { scanQr() }, k.lp(top = 14))
+            content.addView(k.button("Colar código", Kit.Style.GHOST) { pasteCode() }, k.lp(top = 8))
             content.addView(k.button("Procurar servidores", Kit.Style.SECONDARY) { search() }, k.lp(top = 8))
         } else {
             content.addView(k.text("Sem servidor escolhido", 18f, Colors.TEXT, true))
             content.addView(k.muted("Lê o QR do servidor, ou procura e escolhe um na lista abaixo."), k.lp(top = 6))
             content.addView(k.button("Ler QR do servidor") { scanQr() }, k.lp(top = 14))
+            content.addView(k.button("Colar código", Kit.Style.GHOST) { pasteCode() }, k.lp(top = 8))
             content.addView(k.button("Procurar servidores", Kit.Style.SECONDARY) { search() }, k.lp(top = 8))
         }
     }

@@ -43,6 +43,8 @@ Em chamada, o cliente vê o ecrã de chamada com temporizador, microfone, altifa
 
 No Servidor, no separador Ligações, toca em Mostrar código QR. No Cliente, toca em Ler QR do servidor e aponta a câmara. O cliente fica com o servidor escolhido, os IPs dele sondados e a senha igual, sem escrever nada. A câmara só é pedida quando tocas no botão.
 
+Se a câmara não abrir, confirma a permissão da câmara. Se o Android a bloqueou, a app mostra um aviso com o botão Abrir definições. Sem câmara, ou com o QR difícil de ler, o Servidor tem os botões Copiar código e Partilhar, e o Cliente tem Colar código. O código é o mesmo texto do QR, e pode seguir por mensagem ou Bluetooth.
+
 O QR contém a senha do servidor. Mostra-o só a quem deve ter acesso e não o fotografes. Se mudares a senha ou a rede do servidor, o código muda sozinho.
 
 ## Auricular Bluetooth
@@ -112,6 +114,10 @@ No Servidor abre Diagnóstico, toca em Executar diagnóstico e depois em Copiar 
 ## Segundo plano
 
 O botão Segundo plano mantém a app à escuta com o ecrã apagado e mostra uma notificação de chamada em ecrã inteiro quando alguém liga. No Android 14 ou superior pode ser preciso permitir notificações em ecrã inteiro nas definições do Android. Gasta mais bateria.
+
+## Bluetooth
+
+Emparelha primeiro os dois telemóveis nas definições Bluetooth do Android e abre as duas apps. Só aparecem na lista os telemóveis emparelhados que têm o Grfee aberto. Quem liga é o Servidor: em Definições, Gestão da rede, Bluetooth. O Cliente fica à escuta e não precisa de procurar. O Bluetooth tem mais atraso e menos qualidade de áudio do que o Wi-Fi.
 
 ## Segurança
 

@@ -35,7 +35,7 @@ class ServerActivity : BaseActivity() {
         NavTab(R.drawable.ic_wifi, "Ligações", Screen(k, listOf(
             ServerSessionSection(k, engine),
             ServerTilesSection(k, engine, this),
-            PairingSection(k, engine)
+            PairingSection(k, engine, this)
         ))),
         NavTab(R.drawable.ic_people, "Clientes", Screen(k, listOf(
             header(R.drawable.ic_people, "Clientes"),

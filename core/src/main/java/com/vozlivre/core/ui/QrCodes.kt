@@ -12,7 +12,7 @@ object QrCodes {
     fun bitmap(text: String, size: Int): Bitmap {
         val hints = mapOf(
             EncodeHintType.MARGIN to 1,
-            EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
+            EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.L,
             EncodeHintType.CHARACTER_SET to "UTF-8"
         )
         val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, hints)

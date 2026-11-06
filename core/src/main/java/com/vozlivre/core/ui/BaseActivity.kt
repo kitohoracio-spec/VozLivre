@@ -13,6 +13,7 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -126,12 +127,14 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         // Sem esta permissão o Android não deixa usar o auricular Bluetooth na chamada.
         if (Build.VERSION.SDK_INT >= 31) base.add(Manifest.permission.BLUETOOTH_CONNECT)
         withPerms(base) { }
-        if (allGranted(btPerms())) engine.startBluetooth()
+        if (allGranted(btServerPerms())) engine.startBluetooth()
         showMain()
     }
 
     override fun onStart() {
         super.onStart()
+        // Retoma a escuta Bluetooth se o Bluetooth foi ligado depois de a app abrir.
+        if (allGranted(btServerPerms())) engine.startBluetooth()
         engine.ui = this
         onStateChanged()
         currentScreen()?.refresh()
@@ -166,6 +169,10 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         if (Build.VERSION.SDK_INT >= 33) listOf(Manifest.permission.NEARBY_WIFI_DEVICES)
         else listOf(Manifest.permission.ACCESS_FINE_LOCATION)
 
+    /** Para ficar à escuta de ligações Bluetooth basta a permissão de ligar (Android 12 ou superior). A de procurar não é preciso. */
+    private fun btServerPerms(): List<String> =
+        if (Build.VERSION.SDK_INT >= 31) listOf(Manifest.permission.BLUETOOTH_CONNECT) else emptyList()
+
     override fun btPerms(): List<String> =
         if (Build.VERSION.SDK_INT >= 31) listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
         else listOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -182,10 +189,16 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         val action = pending.remove(requestCode)
         if (action != null) {
-            if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) action()
-            else toast("Permissão necessária não concedida")
+            if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                action()
+            } else {
+                val denied = permissions.filterIndexed { i, _ -> grantResults.getOrNull(i) != PackageManager.PERMISSION_GRANTED }
+                // Sem justificação a mostrar, o Android deixou de pedir: só as definições da app resolvem.
+                if (denied.any { !shouldShowRequestPermissionRationale(it) }) offerSettings(denied)
+                else toast("Permissão necessária não concedida")
+            }
         }
-        if (allGranted(btPerms())) engine.startBluetooth()
+        if (allGranted(btServerPerms())) engine.startBluetooth()
         currentScreen()?.refresh()
     }
 
@@ -207,16 +220,47 @@ abstract class BaseActivity : Activity(), CallEngine.Ui, Host {
     }
 
     override fun scanQr(onResult: (String) -> Unit) {
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)) {
+            toast("Este telemóvel não tem câmara. Usa Colar código.")
+            return
+        }
         withPerms(listOf(Manifest.permission.CAMERA)) {
             qrCallback = onResult
-            IntentIntegrator(this)
-                .setCaptureActivity(PortraitCaptureActivity::class.java)
-                .setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
-                .setOrientationLocked(false)
-                .setBeepEnabled(false)
-                .setPrompt("Aponta para o QR do servidor")
-                .initiateScan()
+            try {
+                IntentIntegrator(this)
+                    .setCaptureActivity(PortraitCaptureActivity::class.java)
+                    .setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+                    .setOrientationLocked(false)
+                    .setBeepEnabled(false)
+                    .setPrompt("Aponta para o QR do servidor")
+                    .initiateScan()
+            } catch (e: Exception) {
+                qrCallback = null
+                engine.log("Leitor de QR não abriu: ${e.message}")
+                toast("Não foi possível abrir a câmara. Usa Colar código.")
+            }
         }
+    }
+
+    /** O Android bloqueou o pedido de permissão: explica e abre as definições da app. */
+    private fun offerSettings(denied: List<String>) {
+        val what = denied.joinToString(", ") {
+            when (it) {
+                Manifest.permission.CAMERA -> "Câmara"
+                Manifest.permission.RECORD_AUDIO -> "Microfone"
+                else -> "as permissões pedidas"
+            }
+        }
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle("Permissão bloqueada")
+            .setMessage("O Android deixou de mostrar o pedido. Abre as definições da app, toca em Permissões e ativa: $what.")
+            .setPositiveButton("Abrir definições") { _, _ ->
+                try {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
+                } catch (_: Exception) { toast("Abre as definições do Android, Apps, Grfee, Permissões") }
+            }
+            .setNegativeButton("Agora não", null)
+            .show()
     }
 
     override fun scanBluetooth() {
